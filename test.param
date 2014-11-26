@@ -1,0 +1,20 @@
+
+[Section  One]
+Status: Single
+Name: Derek
+Value=
+Age: 30
+Single: True
+
+[SectionTwo]
+FavoriteColor=Green
+num_of_recvs= Green=dsf what=wtf hey=hagger why=dude
+anotherone=1,10,20
+string=   sdfjk ksdf klsdjf
+
+# jokers
+[SectionThree]
+FamilyName: Johnson
+
+[Others]
+Route: 66

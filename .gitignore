@@ -1,0 +1,14 @@
+*.sw[pno]
+/clib_obj
+/obj
+/bin
+/bbin
+/Makefile
+/makefile
+*.H
+*log*
+*.HH
+*tmp*
+*.pyc
+.svn
+*.*~

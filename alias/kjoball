@@ -1,0 +1,11 @@
+#!/usr/bin/python
+import sys,re,os,string
+import commands
+import os
+
+## This program implements the following aliases
+#alias kjoball "qstat | grep zyang03 | gawk '{print $1}' | xargs qdel"
+cmd1 = "qstat | grep zyang03 | gawk \'{print $1}\' | xargs qdel"
+print cmd1
+os.system(cmd1)
+
