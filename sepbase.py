@@ -9,8 +9,8 @@ debug=0
 
 # Print the current line no.
 def line_no():
-	""" Return the current line number in our program"""
-	return inspect.currentframe().f_back.f_lineno
+  """ Return the current line number in our program."""
+  return 'line %d:' % (inspect.currentframe().f_back.f_lineno)
 
 def err(m=""):
   """Quit with an error first printing out the string m"""
