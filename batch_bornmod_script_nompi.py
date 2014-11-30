@@ -25,7 +25,7 @@ def Run(argv):
   param_reader = pbs_util.JobParamReader(dict_args)
   pbs_script_creator = pbs_util.PbsScriptCreator(param_reader)
   print dict_args
-  prefix = dict_args.get('preifix', 'plane-waz3d')
+  prefix = dict_args.get('prefix')  #, 'plane-waz3d')
   N = param_reader.nfiles
   n = param_reader.nfiles_perjob
   path_out = param_reader.path_out
@@ -34,7 +34,8 @@ def Run(argv):
   fn_csou = param_reader.fn_csou
   fn_v3d = param_reader.fn_v3d
   ishot_list, nshot_list = pbs_util.GenShotsList(param_reader)
-
+  # Initialize PbsSubmitter
+  pbs_submitter = pbs_util.PbsSubmitter(zip(param_reader.queues, param_reader.queues_cap), param_reader.njobs_max, 'zyang03')
   for ish,nsh in zip(ishot_list, nshot_list):  # For each job
     sz_shotrange = "%04d_%04d" % (ish,ish+nsh)
     pbs_script_creator.CreateScriptForNewJob(sz_shotrange)
@@ -42,9 +43,7 @@ def Run(argv):
     #Append commands to the end of the created script file
     fp_o = open(fn_script,'a')
     fp_o.write(pbs_script_creator.CmdCpbvelForEachJob()+'\n')
-    # Initialize PbsSubmitter
-    pbs_submitter = pbs_util.PbsSubmitter(zip(param_reader.queues, param_reader.queues_cap), param_reader.njobs_max, 'zyang03')
-  
+    fp_o.write(pbs_script_creator.CmdCpbimgForEachJob()+'\n\n')
     shotfile_list = []
     # Do nfiles_per_batch shots at once
     for ii in range(0,nsh):
@@ -55,7 +54,7 @@ def Run(argv):
       shotfile_list.append(fn_shotfile)
       fp_o.write(pbs_script_creator.CmdBornModelingPerShot(ishl)+'\n')
       # Copy the data out.
-      fp_o.write("time Cp %s %s\n" % (pbs_script_creator.fnt_crec, fn_shotfile))
+      fp_o.write("time Cp %s %s\n\n" % (pbs_script_creator.fnt_crec, fn_shotfile))
 
     # Final clean up, remove the files at tmp folder.
     fp_o.write("\nfind %s/ -maxdepth 1 -type f -user zyang03 -exec rm {} \\;\n" % path_tmp)

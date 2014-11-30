@@ -26,11 +26,11 @@ def _GenSampleScript(fn_script, cmd):
   return fn_script
 
 
-_CMDLINE_ARGS = 'pbs_template=pbs_tmpl.sh path_out=/data/sep/zyang03/tmp prefix=test queue=q35 csou=csou-waz3d.H vel=vel.H '
+_CMDLINE_ARGS = 'pbs_template=non_pbs_tmpl.sh path_out=/data/sep/zyang03/tmp prefix=test queue=q35 csou=csou-waz3d.H vel=vel.H bimgh=bimgh.H'
 
 class TestBatchBornmodScriptNompi(unittest.TestCase):
   def testOnejobSubmit(self):
-    cmd_line_args_mimic = _CMDLINE_ARGS+'param=waz3d.param ish_beg=5 nfiles=10 nfiles_perjob=1 source_type=point'
+    cmd_line_args_mimic = _CMDLINE_ARGS + ' param=waz3d.param ish_beg=5 nfiles=8 nfiles_perjob=3 source_type=point '
     batch_bornmod_script_nompi.Run(['dummy']+cmd_line_args_mimic.split())
     return
 

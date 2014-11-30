@@ -100,9 +100,9 @@ class JobParamReader:
     self.path_tmp = abspath(dict_args.get('path_tmp', '/tmp'))
     # Get the velocity file, csou file and filename prefix for intermediate files.
     self.source_type = dict_args.get("source_type", "plane")
-    self.fn_csou = abspath(dict_args.get("csou"))
+    self.fn_csou = abspath(dict_args["csou"])
     self.fn_v3d = abspath(dict_args["vel"])
-    self.prefix = dict_args.get('preifix')
+    self.prefix = dict_args['prefix']
     # If user only select a portion of frequencies to migrate/compute/model, w_f,w_n
     self.ws_wnd_f = None
     self.ws_wnd_n = None
@@ -157,12 +157,13 @@ class PbsScriptCreator:
   def CmdMigrationPerShot(self, ish, image_domains = (None,)*6):
     '''Generate shell cmd for doing the migration.
     image_domains: is a tuple of (xmin,xmax,ymin,ymax,zmin,zmax) that indicate the imaging domain.'''
+    cmd = '# Perform migration for the current shot.\n'
     path_tmp = self.param_reader.path_tmp
     prefix = self.param_reader.prefix
     self.fnt_imgh = '%s/imgh-%s-%04d.H' % (path_tmp,prefix,ish)
     self.fnt_imgh_list.append(self.fnt_imgh)
     wem_bin_path = self.dict_args['TANG_BIN']
-    cmd = "%s/bwi-wem3d-Zh.x %s %s mode=imgadj crec=%s csou=%s bimg=%s bvel=%s datapath=%s/ memchk=n report=y " % (
+    cmd += "%s/bwi-wem3d-Zh.x %s %s mode=imgadj crec=%s csou=%s bimg=%s bvel=%s datapath=%s/ memchk=n report=y " % (
         wem_bin_path, self.dict_args['MIG_PAR_WAZ3D'], self.dict_args['SS_OFFSET_PAR'], self.fnt_crec, self.fnt_csou, self.fnt_imgh,self.fnt_bvel, path_tmp)
     xmin, xmax = image_domains[0:2]
     ymin, ymax = image_domains[2:4]
@@ -175,6 +176,7 @@ class PbsScriptCreator:
     return cmd2
 
   def CmdCombineMultipleOutputSepHFiles(sz_shotrange, local_sepH_list, global_output_filename, combine_pars=""):
+    cmd = '# Combine the results from multiple shots into one.\n'
     path_out = self.param_reader.path_out
     prefix = self.param_reader.prefix
     n = len(local_sepH_list)
@@ -189,7 +191,7 @@ class PbsScriptCreator:
       cmd1 = "time %s/Combine.x <%s filelist=%s output=%s %s \n" % (
           dict_args['YANG_BIN'],local_sepH_list[0],fn_tflist, global_output_filename,combine_pars)
     # The combine process could go wrong, therefore add a conditional clause
-    cmd = '''
+    cmd += '''
 if ( $status == 0 ) then
   echo %s
 else
@@ -199,15 +201,17 @@ endif
     return cmd
 
   def CmdBornModelingPerShot(self, ish):
+    cmd = '# Do born modeling for the current shot.\n' 
     path_tmp = self.param_reader.path_tmp
     src_type = self.param_reader.source_type
     self.fnt_crec = '%s/crec-model-%04d.H' % (path_tmp,ish)
     wem_bin_path = self.dict_args['TANG_BIN']
     if src_type == 'plane':
-      cmd = "%s/bwi-wem3d-Zh.x %s %s mode=imgfwd crec=%s csou=%s bimg=%s bvel=%s datapath=%s/" % (
-          wem_bin_path, self.dict_args['MIG_PAR_WAZ3D'], self.dict_args['GEOM_GXY'], self.fnt_crec, self.fnt_csou, self.fnt_imgh,self.fnt_bvel, path_tmp)
+      cmd += "%s/bwi-wem3d-Zh.x %s %s mode=imgfwd crec=%s csou=%s bimg=%s bvel=%s datapath=%s/" % (
+          wem_bin_path, self.dict_args['MIG_PAR_WAZ3D'], self.dict_args['GEOM_GXY'], self.fnt_crec, self.fnt_csou, self.fnt_bimgh,self.fnt_bvel, path_tmp)
     else:
-      assert False
+      cmd += "%s/bwi-wem3d-Zh.x %s %s mode=imgfwd crec=%s csou=%s bimg=%s bvel=%s datapath=%s/" % (
+          wem_bin_path, self.dict_args['MIG_PAR_WAZ3D'], self.dict_args['GEOM_GXY'], self.fnt_crec, self.fnt_csou, self.fnt_bimgh,self.fnt_bvel, path_tmp)
     return cmd
 
   def ConceiveCommand(self, ish):
@@ -216,43 +220,47 @@ endif
     pass
 
   def CmdCpbvelForEachJob(self):
+    cmd = '# Copy the velocity file to local disk.\n'
     fn_v3d = self.param_reader.fn_v3d
     path_tmp = self.param_reader.path_tmp
     fnt_bvel = '%s/vel-%s.H' % (path_tmp,self.sz_shotrange)
     # For cping base velocity to local folder.
-    cmd1 = "time Cp <%s >%s datapath=%s/" % (fn_v3d, fnt_bvel, path_tmp)
-    return cmd1
+    cmd += "time Cp <%s >%s datapath=%s/" % (fn_v3d, fnt_bvel, path_tmp)
+    return cmd
   
   def CmdCpbimgForEachJob(self):
+    cmd = '# Copy the background image(reflectivity model) file to local disk.\n'
     path_tmp = self.param_reader.path_tmp
-    self.fn_bimgh = abspath(dict_args["bimgh"])
+    self.fn_bimgh = abspath(self.dict_args["bimgh"])
     self.fnt_bimgh = '%s/bimgh-%s.H' % (path_tmp,self.sz_shotrange)
     # For cping base imgh to local folder.
-    cmd1 = "time Cp <%s >%s datapath=%s/" % (self.fn_bimgh,self.fnt_bimgh, path_tmp)
-    return cmd1
+    cmd += "time Cp <%s >%s datapath=%s/" % (self.fn_bimgh,self.fnt_bimgh, path_tmp)
+    return cmd
 
   def CmdCpbvelForEachJob(self):
-    '''For cping base velocity to local folder.'''
+    cmd = '# Copy the background vel model file to local disk.\n'
     fn_v3d = self.param_reader.fn_v3d
     path_tmp = self.param_reader.path_tmp
     self.fnt_bvel = '%s/vel-%s.H' % (path_tmp,self.sz_shotrange)
-    cmd1 = "time Cp <%s >%s datapath=%s/" % (fn_v3d, self.fnt_bvel, path_tmp)
-    return cmd1
+    cmd += "time Cp <%s >%s datapath=%s/" % (fn_v3d, self.fnt_bvel, path_tmp)
+    return cmd
 
   def CmdCpCrecForEachShot(self, ish, fn_shot_crec):
     '''Copy the related crec binaries (e.g. data) to local folder, this applies to
     the imaging case not modeling case.'''
+    cmd = '# Copy the data of current shot to local disk.\n'
     path_tmp = self.path_tmp
     ws_wnd_f, ws_wnd_n = self.param_reader.ws_wnd_f, self.param_reader.ws_wnd_n
     if self.ws_wnd_n is not None:
-      cmd1 = "Window3d <%s f3=%d n3=%d >%s squeeze=n datapath=%s/ " % (
+      cmd += "Window3d <%s f3=%d n3=%d >%s squeeze=n datapath=%s/ " % (
           fn_shot_crec, self.ws_wnd_f, self.ws_wnd_n, self.fnt_crec, path_tmp)
     else:
-      cmd1 = "Cp %s %s datapath=$%s/ "% (fn_shot_crec,fnt_crec, path_tmp)
-    return cmd1
+      cmd += "Cp %s %s datapath=$%s/ "% (fn_shot_crec,fnt_crec, path_tmp)
+    return cmd
 
   def CmdCsouForEachShot(self,ish):
     '''Generate the command for each shot.'''
+    cmd = '# Generate the source file for current shot on local disk.\n'
     path_tmp = self.param_reader.path_tmp
     # If user only select a portion of frequencies to migrate/compute/model, w_f,w_n
     ws_wnd_f, ws_wnd_n = self.param_reader.ws_wnd_f, self.param_reader.ws_wnd_n
@@ -275,7 +283,7 @@ endif
             fn_csou,ws_wnd_f,ws_wnd_n,fnt_csou,path_tmp)
       else:
         cmd2 = "Cp %s %s datapath=%s/ "%(fn_csou, fnt_csou, path_tmp)
-    return cmd2
+    return cmd+cmd2
 
 
 class PbsSubmitter:

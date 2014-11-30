@@ -214,7 +214,7 @@ def RetrieveAllEqArgs(eq_args_from_cmdline):
   eq_args = eq_args_from_cmdline
   if 'param' in eq_args:
     param_file = eq_args['param']
-    dict_args = sepbase.GetParamsFromIniFile(param_file, None)
+    dict_args = GetParamsFromIniFile(param_file, None)
     dict_args.update(eq_args)
   else:
     dict_args = eq_args
@@ -224,6 +224,7 @@ def RetrieveAllEqArgs(eq_args_from_cmdline):
 def ConfigurationFromIniFile(param_file):
   '''Parse a Ini format parameter file, and return the config object.'''
   config = ConfigParser.ConfigParser()
+  config.optionxform = str  # Set the configparser to preserve case, by default config Parser makes everything lowercase.
   config.read(param_file)
   return config
 
@@ -234,7 +235,7 @@ def GetParamsBySection(config, section):
   '''
   sections_all = config.sections()
   secs = []
-  if section in secs_all:
+  if section in sections_all:
     secs.append(section)
   else:
     assert section is None, 'Un Recognized section name %s !' % section
