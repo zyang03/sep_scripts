@@ -15,7 +15,6 @@ def self_doc():
 #						 *.py pbs_template=pbs_script_tmpl.sh nfiles=1001 path=path_out prefix-img=img-waz3d queue=q35 nnodes=0 njobmax=5 ish_beglist=? nfiles_perbatch=10 csou=csou.H
 
 
-
 if __name__ == '__main__':
   eq_args,args=parse_args(sys.argv[1:])
   dict_args = sepbase.RetrieveAllEqArgs(eq_args_from_cmdline)
@@ -78,7 +77,6 @@ if __name__ == '__main__':
   	# Last step, remove the files at tmp folder.
   	fp_o.write("\nfind %s/ -maxdepth 1 -type f -user zyang03 -exec rm {} \\;\n" % path_tmp)
   	fp_o.close()
-  	
   	# Submit the job
   	pbs_submitter.SubmitJob(fn_script)
   	print "Finished submission ish=%d / %d, %d" % (ish, nsh, N)

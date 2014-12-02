@@ -1,7 +1,48 @@
 import commands,os
 import sepbase
+import time
 from os.path import abspath
 from sepbase import line_no
+
+
+def CheckPrevCmdResultCShellScript(prev_cmd):
+  '''Return a piece of script that checks the return status of the previous cmd executed in the same script.'''
+  return '''
+if ( $status != 0 ) then
+  echo ! The prev cmd failed: \" %s \"
+  exit -1
+endif
+  ''' % (prev_cmd)
+
+def CheckSephFileError(fn_seph, check_binary=False):
+  '''Check whether a .H file is a valid one, i.e. has 100% of data and has no NaN(not a number) in it.
+  Args:
+    fn_seph: The name of the file to be checked.
+    check_binary: if False, then only check the existence and size; if True, then check in addition whether there is nan.
+  Returns:
+    0 if the file is OK. 1 if it has Nan; -1 if there is problem with the file itself, like not exist or binary is incomplete.
+  '''
+  if not check_binary:  # Use In3d command to check.
+    cmd1 = "In3d %s " % fn_seph
+    stat1,out1=commands.getstatusoutput(cmd1)
+    if stat1 != 0:  # File content is not complete or not file not exist
+      return -1
+    # Search for indications of binary portion being complete.
+    pos = out1.find('[  100./')
+    if pos == -1:
+      return -1
+    else:
+      return 0
+  else:  # Use Attr to check the values of the binary part as well.
+    cmd1 = "Attr < %s " % fn_seph
+    stat1,out1=commands.getstatusoutput(cmd1)
+    if stat1 != 0:  # File content is not complete.
+      return -1
+    nan_pos = out1.find('nan')
+    if nan_pos == -1:  # not find not-a-number, file content is valid.
+      return 0
+    else:
+      return 1
 
 
 def GenShotsList(param_reader):
@@ -90,8 +131,15 @@ class JobParamReader:
     self.dict_args = dict_args
     self.fname_template_script = dict_args['pbs_template']
     self.queues = dict_args.get('queues','default').split(',')
-    self.queues_cap = map(int, dict_args.get('queues_cap', '1').split(','))
-    self.total_jobs_cap = int(dict_args.get('total_jobs_cap',10000))
+    self.queues_cap = dict_args.get('queues_cap')
+    nqueue = len(self.queues)
+    if self.queues_cap:  # Not None
+      self.queues_cap = map(int, self.queues_cap.split(','))
+      assert len(queues_cap) == nqueue, 'queues and queues_cap have different num_of_elements!'
+    else:  # Provide default values.
+      self.queues_cap = [1]*nqueue
+    # The cap of total number of jobs in a queue at any given time.
+    self.total_jobs_cap = int(dict_args.get('total_jobs_cap',60))
     self.nfiles = int(dict_args['nfiles'])  # Total number of shots to simulate/generate/compute.
     self.nfiles_perjob = int(dict_args.get("nfiles_perjob", 1))
     assert dict_args.get("nfiles_perbatch") is None, 'Obsolete option nfiles_perbatch!!'
@@ -124,23 +172,29 @@ class JobParamReader:
     return
 
 
+
 class PbsScriptCreator:
   """Given the input arg parameters, generate a PBS script body."""
   def __init__(self, param_reader):
     self.param_reader = param_reader
     self.dict_args = param_reader.dict_args
-    self.sz_shotrange = None
+    self.user = self.dict_args['user']
 
-  def CreateScriptForNewJob(self, sz_shotrange):
-    """Construct the pbs script from script_template."""
-    self.sz_shotrange = sz_shotrange
+  def CmdFinalCleanUpTempDir(self):
+    cmd = '#Final clean up, remove the files at tmp folder.'
+    cmd += "\nfind %s/ -maxdepth 1 -type f -user %s -exec rm {} \\;\n" % (self.param_reader.path_tmp, self.user)
+    return cmd
+
+  def CreateScriptForNewJob(self, script_filename_stem):
+    """Construct the pbs script from script_template.
+    Args:
+      script_filename_stem: The basename (without extension) for the new script name.
+      """
     path_out = self.param_reader.path_out
     prefix = self.param_reader.prefix
     fname_template_script = self.param_reader.fname_template_script
-    self.fn_imgh  = "%s/%s-%s.H"  %(path_out, prefix, sz_shotrange)
-    self.fnt_imgh_list = []
-    self.fn_script = '%s/%s-%s.sh'  %(path_out, prefix, sz_shotrange)
-    self.fn_log = '%s/%s-%s.log'  %(path_out,prefix,sz_shotrange)
+    self.fn_script = '%s/%s-%s.sh' % (path_out, prefix, script_filename_stem)
+    self.fn_log = '%s/%s-%s.log' % (path_out, prefix, script_filename_stem)
     cmd1 = "cp %s %s" % (fname_template_script, self.fn_script)
     sepbase.RunShellCmd(cmd1)
     nnodes = int(self.dict_args.get('nnodes',1))  # By default, use one node per job
@@ -148,10 +202,29 @@ class PbsScriptCreator:
       cmd1 = ("sed -i 's/#PBS\ -l\ nodes=1/#PBS\ -l\ nodes=%d/g'   %s" %
               (nnodes, self.fn_script))
       sepbase.RunShellCmd(cmd1)
+    # Change jobname for better readability.
+    cmd0 = "sed -i '/#PBS -N/c\#PBS -N %s' %s" % (script_filename_stem, self.fn_script)
     # Redirect PBS output, change the entire PBS -o and -e line
     cmd1 = "sed -i '/#PBS -o/c\#PBS -o %s' %s" % (self.fn_log, self.fn_script)
     cmd2 = "sed -i '/#PBS -e/c\#PBS -e %s' %s" % (self.fn_log, self.fn_script)  
-    sepbase.RunShellCmd(cmd1+'\n'+cmd2)
+    sepbase.RunShellCmd(cmd0+'\n'+cmd1+'\n'+cmd2)
+    return
+
+
+class WeiScriptor:
+  """Given the input arg parameters, generate scripts that performs a WEI (Wave equation inversion) operation."""
+  def __init__(self, param_reader):
+    self.param_reader = param_reader
+    self.dict_args = param_reader.dict_args
+    self.sz_shotrange = None
+
+  def NewJob(self, sz_shotrange):
+    """Call this func first everytime you start a new job."""
+    self.sz_shotrange = sz_shotrange
+    path_out = self.param_reader.path_out
+    prefix = self.param_reader.prefix
+    self.fn_imgh  = "%s/%s-%s.H"  %(path_out, prefix, sz_shotrange)
+    self.fnt_imgh_list = []
     return
 
   def CmdMigrationPerShot(self, ish, image_domains = (None,)*6):
@@ -172,8 +245,9 @@ class PbsScriptCreator:
       cmd += " image_xmin=%.1f image_xmax=%.1f image_ymin=%.1f image_ymax=%.1f " % (
           xmin,xmax,ymin,ymax)
     if zmin is not None:
-      cmd2 += " image_zmin=%.1f image_zmax=%.1f " % (zmin,zmax)
-    return cmd2
+      cmd += " image_zmin=%.1f image_zmax=%.1f " % (zmin,zmax)
+    return cmd + CheckPrevCmdResultCShellScript(cmd)
+
 
   def CmdCombineMultipleOutputSepHFiles(sz_shotrange, local_sepH_list, global_output_filename, combine_pars=""):
     cmd = '# Combine the results from multiple shots into one.\n'
@@ -191,13 +265,7 @@ class PbsScriptCreator:
       cmd1 = "time %s/Combine.x <%s filelist=%s output=%s %s \n" % (
           dict_args['YANG_BIN'],local_sepH_list[0],fn_tflist, global_output_filename,combine_pars)
     # The combine process could go wrong, therefore add a conditional clause
-    cmd += '''
-if ( $status == 0 ) then
-  echo %s
-else
-  echo the execution of %s failed, therefore the target %s is not generated
-endif
-    '''% (cmd1, global_output_filename)
+    cmd += (cmd1+CheckPrevCmdResultCShellScript(cmd1))
     return cmd
 
   def CmdBornModelingPerShot(self, ish):
@@ -207,12 +275,12 @@ endif
     self.fnt_crec = '%s/crec-model-%04d.H' % (path_tmp,ish)
     wem_bin_path = self.dict_args['TANG_BIN']
     if src_type == 'plane':
-      cmd += "%s/bwi-wem3d-Zh.x %s %s mode=imgfwd crec=%s csou=%s bimg=%s bvel=%s datapath=%s/" % (
+      cmd1 = "time %s/bwi-wem3d-Zh.x %s %s mode=imgfwd crec=%s csou=%s bimg=%s bvel=%s datapath=%s/" % (
           wem_bin_path, self.dict_args['MIG_PAR_WAZ3D'], self.dict_args['GEOM_GXY'], self.fnt_crec, self.fnt_csou, self.fnt_bimgh,self.fnt_bvel, path_tmp)
     else:
-      cmd += "%s/bwi-wem3d-Zh.x %s %s mode=imgfwd crec=%s csou=%s bimg=%s bvel=%s datapath=%s/" % (
+      cmd1 = "time %s/bwi-wem3d-Zh.x %s %s mode=imgfwd crec=%s csou=%s bimg=%s bvel=%s datapath=%s/" % (
           wem_bin_path, self.dict_args['MIG_PAR_WAZ3D'], self.dict_args['GEOM_GXY'], self.fnt_crec, self.fnt_csou, self.fnt_bimgh,self.fnt_bvel, path_tmp)
-    return cmd
+    return cmd + cmd1+CheckPrevCmdResultCShellScript(cmd1)
 
   def ConceiveCommand(self, ish):
     '''Conceive all the cmd that will be used in the script.'''
@@ -225,25 +293,25 @@ endif
     path_tmp = self.param_reader.path_tmp
     fnt_bvel = '%s/vel-%s.H' % (path_tmp,self.sz_shotrange)
     # For cping base velocity to local folder.
-    cmd += "time Cp <%s >%s datapath=%s/" % (fn_v3d, fnt_bvel, path_tmp)
-    return cmd
-  
+    cmd1 = "time Cp <%s >%s datapath=%s/" % (fn_v3d, fnt_bvel, path_tmp)
+    return cmd + cmd1+CheckPrevCmdResultCShellScript(cmd1)
+
   def CmdCpbimgForEachJob(self):
     cmd = '# Copy the background image(reflectivity model) file to local disk.\n'
     path_tmp = self.param_reader.path_tmp
     self.fn_bimgh = abspath(self.dict_args["bimgh"])
     self.fnt_bimgh = '%s/bimgh-%s.H' % (path_tmp,self.sz_shotrange)
     # For cping base imgh to local folder.
-    cmd += "time Cp <%s >%s datapath=%s/" % (self.fn_bimgh,self.fnt_bimgh, path_tmp)
-    return cmd
+    cmd1 = "time Cp <%s >%s datapath=%s/" % (self.fn_bimgh,self.fnt_bimgh, path_tmp)
+    return cmd + cmd1+CheckPrevCmdResultCShellScript(cmd1)
 
   def CmdCpbvelForEachJob(self):
     cmd = '# Copy the background vel model file to local disk.\n'
     fn_v3d = self.param_reader.fn_v3d
     path_tmp = self.param_reader.path_tmp
     self.fnt_bvel = '%s/vel-%s.H' % (path_tmp,self.sz_shotrange)
-    cmd += "time Cp <%s >%s datapath=%s/" % (fn_v3d, self.fnt_bvel, path_tmp)
-    return cmd
+    cmd1 = "time Cp <%s >%s datapath=%s/" % (fn_v3d, self.fnt_bvel, path_tmp)
+    return cmd + cmd1+CheckPrevCmdResultCShellScript(cmd1)
 
   def CmdCpCrecForEachShot(self, ish, fn_shot_crec):
     '''Copy the related crec binaries (e.g. data) to local folder, this applies to
@@ -252,11 +320,11 @@ endif
     path_tmp = self.path_tmp
     ws_wnd_f, ws_wnd_n = self.param_reader.ws_wnd_f, self.param_reader.ws_wnd_n
     if self.ws_wnd_n is not None:
-      cmd += "Window3d <%s f3=%d n3=%d >%s squeeze=n datapath=%s/ " % (
+      cmd1 = "Window3d <%s f3=%d n3=%d >%s squeeze=n datapath=%s/ " % (
           fn_shot_crec, self.ws_wnd_f, self.ws_wnd_n, self.fnt_crec, path_tmp)
     else:
-      cmd += "Cp %s %s datapath=$%s/ "% (fn_shot_crec,fnt_crec, path_tmp)
-    return cmd
+      cmd1 = "Cp %s %s datapath=$%s/ "% (fn_shot_crec,fnt_crec, path_tmp)
+    return cmd + cmd1+CheckPrevCmdResultCShellScript(cmd1)
 
   def CmdCsouForEachShot(self,ish):
     '''Generate the command for each shot.'''
@@ -272,18 +340,18 @@ endif
       n4 = int(sepbase.get_sep_axis_params(fn_csou,4)[0])
       f5 = ish / n4
       f4 = ish % n4
-      if self.ws_wnd_n is not None:
+      if ws_wnd_n is not None:
         cmd2 = "Window3d <%s f3=%d n3=%d n4=1 n5=1 f4=%d f5=%d >%s squeeze=n datapath=%s/ " % (
             fn_csou,ws_wnd_f,ws_wnd_n,f4,f5,fnt_csou,path_tmp)
       else:
-        cmd2 = "Cp %s %s datapath=%s/ "%(fn_csou, fnt_csou, path_tmp)
+        cmd2 = "Window3d <%s n4=1 n5=1 f4=%d f5=%d >%s squeeze=n datapath=%s/ "%(fn_csou,f4,f5,fnt_csou,path_tmp)
     else:  # Point Source
       if ws_wnd_n is not None:
         cmd2 = "Window3d <%s f3=%d n3=%d >%s squeeze=n datapath=%s/ " % (
             fn_csou,ws_wnd_f,ws_wnd_n,fnt_csou,path_tmp)
       else:
         cmd2 = "Cp %s %s datapath=%s/ "%(fn_csou, fnt_csou, path_tmp)
-    return cmd+cmd2
+    return cmd+cmd2+CheckPrevCmdResultCShellScript(cmd2)
 
 
 class PbsSubmitter:
@@ -310,12 +378,32 @@ class PbsSubmitter:
     else:
       self._total_jobs_cap = total_jobs_cap
 
+  def WaitOnAllJobsFinish(self, grep_pattern = None):
+    '''The function will block our script until all related jobs (that can be found under the current user and matches the grep_pattern) have been finished.
+    Args:
+      grep_pattern: An optional pattern string that will be used to find all jobs under the given user and matches the grep_pattern.'''
+    icnt = 0
+    while True:
+      if not grep_pattern:
+        cmd = "qstat -a | grep %s | wc -l " % (self._user_name)
+      else:
+        cmd = "qstat -a | grep %s | grep %s | wc -l " % (self._user_name, grep_pattern)
+      stat1,out1=commands.getstatusoutput(cmd)
+      if int(out1) > 0:
+        icnt += 1
+        if icnt == 1: print "Wait On All Jobs to Finish..."
+        time.sleep(120)
+      else:
+        break
+    return
+
   def SubmitJob(self, fn_script):
     #Submit the job script to pbs system by looking at if there are enough running jobs
     num_queues = len(self._queues_info)
     i_queue = 0
     while True:
       queue_name, queue_cap = self._queues_info[i_queue]
+      print "In SubmitJob: ", num_queues, i_queue, queue_name, queue_cap
       jobR = 0; jobQ = 0; jobC = 0
       # Check how many jobs are in this queue.
       cmd_template = "qstat -a | grep %s | grep \' %s \' | grep %s | wc -l " 
@@ -337,7 +425,7 @@ class PbsSubmitter:
         stat1, out1 = commands.getstatusoutput(cmd1)
         if stat1 != 0:
           err("submit job failed, msg=%d,%s" % (stat1,out1))
-        os.system("sleep 1")
+        os.system("sleep 15")  # Stagger the job start-off time a bit.
         break
       else:
         # if not last queue, then try next queue
@@ -345,6 +433,8 @@ class PbsSubmitter:
           i_queue = (i_queue+1) % num_queues
         else:  # back-off for a while before retrying
           print "Waiting on the pbs queue..."
-          os.system("sleep 30")  # Sleep a while (mins) before do the query again.
-
+          os.system("sleep 60")  # Sleep a while (secs) before do the query again.
+          # Then start polling the first queue again.
+          i_queue = 0
+    return
 

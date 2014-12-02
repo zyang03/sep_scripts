@@ -1,8 +1,7 @@
-import sys,re,os,string
-import commands
 import array
-import os
+import commands
 import inspect
+import sys,re,os,string
 
 sepbin=os.environ["SEP"]+"/bin"
 debug=0
@@ -218,6 +217,9 @@ def RetrieveAllEqArgs(eq_args_from_cmdline):
     dict_args.update(eq_args)
   else:
     dict_args = eq_args
+  # Find the current user name
+  if 'user' not in dict_args:
+    dict_args['user'] = os.environ['USER']
   return dict_args
 
 

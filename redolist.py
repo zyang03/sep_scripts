@@ -13,18 +13,17 @@ def self_doc():
   print 
 
 ## This program fills in the unfinished shots given a finished shots list
-# Usage1:    *.py shotlist shotlist.redolist
+# Usage1:    *.py shotlist shotlist.redolist N=tot_num_files
 
 eq_args,args=parse_args(sys.argv[1:])
 fn_in_script = args[0] #assume the input file name is the first argument
 fn_out_script = args[1] #assume the target file name is the second argument
 
 #separate the files and path
-N = 806
 if eq_args.has_key("N"):
-	n=int(eq_args["N"])
+	N=int(eq_args["N"])
 else:
-	print ("!Warning: Not specifying N!")
+	assert False, "!Warning: Not specifying N!"
 
 j = 1
 if eq_args.has_key("j"):
