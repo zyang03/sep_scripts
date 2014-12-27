@@ -7,12 +7,14 @@ from sepbase import line_no
 
 def CheckPrevCmdResultCShellScript(prev_cmd):
   '''Return a piece of script that checks the return status of the previous cmd executed in the same script.'''
-  return '''
+  cmd = '''
 if ( $status != 0 ) then
   echo ! The prev cmd failed: \" %s \"
   exit -1
 endif
-  ''' % (prev_cmd)
+''' % (prev_cmd)
+  return cmd
+
 
 def CheckSephFileError(fn_seph, check_binary=False):
   '''Check whether a .H file is a valid one, i.e. has 100% of data and has no NaN(not a number) in it.
@@ -43,7 +45,6 @@ def CheckSephFileError(fn_seph, check_binary=False):
       return 0
     else:
       return 1
-
 
 def GenShotsList(param_reader):
   '''Figure out the indices for the shots we need to run/compute.
@@ -105,9 +106,9 @@ def GenShotsList(param_reader):
 class ShotsInfo:
   def __init__(self, fn_shots_info):
     '''Helper class that manages the individual shot file information stored in a .shotsInfo file.'''
-    self._fn_shots_info = fname_shots_info
+    self._fn_shots_info = fn_shots_info
     # Read all the lines.
-    fp = open(fname_shots_info,'r')
+    fp = open(fn_shots_info,'r')
     self.lines = []
     for line in fp:
       line = line.strip()
@@ -115,14 +116,17 @@ class ShotsInfo:
         self.lines.append(line)
     fp.close()
 
-  def ShotFileNameAt(ish):
+  def TotNumShots(self):
+    return len(self.lines)-2
+
+  def ShotFileNameAt(self,ish):
     '''Find the filename in the shotInfoFile corresponding to the shot index.
     ####and extract the receiver geometry.'''
-    return lines[ish+2].split(" ")[0]  # Extract the first word, which is the filename.
+    return self.lines[ish+2].split(" ")[0]  # Extract the first word, which is the filename.
 
-  def ShotFileApertureAt(ish):
+  def ShotFileApertureAt(self, ish):
     '''Return a tuple of [xmin,xmax,ymin,ymax] indicating the aperture of the shot record.'''
-    return map(float, lines[ish+2].split(" ")[1:])
+    return map(float, self.lines[ish+2].split(" ")[1:])
 
 
 class JobParamReader:
@@ -138,19 +142,30 @@ class JobParamReader:
       assert len(queues_cap) == nqueue, 'queues and queues_cap have different num_of_elements!'
     else:  # Provide default values.
       self.queues_cap = [1]*nqueue
+    self.prefix = dict_args['prefix']  # The prefix used for generating filenames for intermediate/output datafiles.
     # The cap of total number of jobs in a queue at any given time.
     self.total_jobs_cap = int(dict_args.get('total_jobs_cap',60))
+    self.njobs_max = 1  # For now set it to 1.
+    self.path_out = abspath(dict_args.get("path_out", os.getcwd()))
+    self.path_tmp = abspath(dict_args.get('path_tmp', '/tmp'))
+    return
+
+class ParallelParamReader(JobParamReader):
+  '''A subclass that read extra parameters about job parallelization, mostly through sharding the input data.'''
+  def __init__(self, dict_args):
+    super(ParallelParamReader,self).__init__(dict_args)
     self.nfiles = int(dict_args['nfiles'])  # Total number of shots to simulate/generate/compute.
     self.nfiles_perjob = int(dict_args.get("nfiles_perjob", 1))
     assert dict_args.get("nfiles_perbatch") is None, 'Obsolete option nfiles_perbatch!!'
     self.njobs_max = int(dict_args.get('njobs_max', self.nfiles))  # Total number of jobs to simulate, will stop submission after such number of jobs have been submitted.
-    self.path_out = abspath(dict_args.get("path_out", os.getcwd()))
-    self.path_tmp = abspath(dict_args.get('path_tmp', '/tmp'))
+    
+class WeiParamReader(ParallelParamReader):
+  def __init__(self, dict_args):
+    super(WeiParamReader,self).__init__(dict_args)  # Call base class constructor.
     # Get the velocity file, csou file and filename prefix for intermediate files.
     self.source_type = dict_args.get("source_type", "plane")
     self.fn_csou = abspath(dict_args["csou"])
     self.fn_v3d = abspath(dict_args["vel"])
-    self.prefix = dict_args['prefix']
     # If user only select a portion of frequencies to migrate/compute/model, w_f,w_n
     self.ws_wnd_f = None
     self.ws_wnd_n = None
@@ -169,8 +184,6 @@ class JobParamReader:
       strs_minmax = dict_args["zs"].split(",")
       self.g_output_image_domain[4:6] = map(float, strs_minmax)
     print "global_output_domain_xs,ys,zs = ", self.g_output_image_domain
-    return
-
 
 
 class PbsScriptCreator:
@@ -180,9 +193,16 @@ class PbsScriptCreator:
     self.dict_args = param_reader.dict_args
     self.user = self.dict_args['user']
 
+  def AppendScriptsContent(scripts):
+    '''Append the list of lines in 'scripts' to the underlying script file.
+    Returns the script file name.'''
+    fp_o = open(self.fn_script,'a'); fp_o.writelines(scripts); fp_o.close()
+    return self.fn_script
+
   def CmdFinalCleanUpTempDir(self):
-    cmd = '#Final clean up, remove the files at tmp folder.'
-    cmd += "\nfind %s/ -maxdepth 1 -type f -user %s -exec rm {} \\;\n" % (self.param_reader.path_tmp, self.user)
+    cmd = '\n# Final clean up, remove the files at tmp folder.'
+    cmd += "\nfind %s/ -maxdepth 1 -type f -user %s -exec rm {} \\;\n" % (
+        self.param_reader.path_tmp, self.user)
     return cmd
 
   def CreateScriptForNewJob(self, script_filename_stem):
@@ -210,9 +230,35 @@ class PbsScriptCreator:
     sepbase.RunShellCmd(cmd0+'\n'+cmd1+'\n'+cmd2)
     return
 
+  def CmdCombineMultipleOutputSephFiles(self, local_seph_list, output_fn, combine_pars="", datapath=None):
+    if datapath is None:
+      datapath = os.path.split(os.path.abspath(output_fn))[0]
+    cmd = '# Combine the results from multiple shots into one.\n'
+    n = len(local_seph_list)
+    if n == 1:
+      cmd1 = "time Cp %s %s datapath=%s/" % (local_seph_list[0],output_fn,datapath)
+    else:
+      #axis 3,4,5 are (x,y,z)
+      if n <= 6:  # If the list is small, just pile filenames on the command line arguments.
+        cmd1 = "time %s/Combine <%s fnames=%s output=%s %s datapath=%s/" % (
+            self.dict_args['YANG_BIN'],local_seph_list[0],
+            ','.join(local_seph_list), output_fn, combine_pars,datapath)
+      else:  # Write filenames line-by-line into a temporary file.
+        fn_tflist = "%s.flist"%(os.path.splitext(output_fn)[0])
+        fp_tflist = open(fn_tflist,"w")
+        fp_tflist.write("\n".join(local_seph_list))
+        fp_tflist.close()
+        #axis 3,4,5 are (x,y,z)
+        cmd1 = "time %s/Combine <%s filelist=%s output=%s %s datapath=%s/" % (
+            self.dict_args['YANG_BIN'],local_seph_list[0],
+            fn_tflist, output_fn, combine_pars, datapath)
+    # The combine process could go wrong, therefore add a conditional clause
+    cmd += (cmd1+CheckPrevCmdResultCShellScript(cmd1))
+    return cmd
+
 
 class WeiScriptor:
-  """Given the input arg parameters, generate scripts that performs a WEI (Wave equation inversion) operation."""
+  '''Given the input arg parameters, generate scripts that performs a WEI (Wave equation inversion) operation.'''
   def __init__(self, param_reader):
     self.param_reader = param_reader
     self.dict_args = param_reader.dict_args
@@ -223,9 +269,26 @@ class WeiScriptor:
     self.sz_shotrange = sz_shotrange
     path_out = self.param_reader.path_out
     prefix = self.param_reader.prefix
-    self.fn_imgh  = "%s/%s-%s.H"  %(path_out, prefix, sz_shotrange)
     self.fnt_imgh_list = []
     return
+
+  def CmdWetomoPerShot(self, ish, image_domains = (None,)*6):
+    '''Generate shell cmd for doing the image-space tomo operator: dimg ==> dvel.
+    image_domains: is a tuple of (xmin,xmax,ymin,ymax,zmin,zmax) that indicate the imaging domain.'''
+    cmd = '# Perform Wetomo adj for the current shot.\n'
+    path_tmp = self.param_reader.path_tmp
+    prefix = self.param_reader.prefix
+    self.fnt_output = '%s/dvel-%s-%04d.H' % (path_tmp,prefix,ish)
+    self.fnt_output_list.append(self.fnt_output)
+    cmd1 = "time %s/bwi-wet3d.x %s mode=tomadj crec=%s csou=%s dimg=%s bvel=%s dvel=%s datapath=%s/" % (
+        self.dict_args['TANG_BIN'], self.dict_args['MIG_PAR_WAZ3D'], self.fnt_crec, self.fnt_csou, self.fnt_dimg,self.fnt_bvel,self.fnt_output, path_tmp)
+    xmin,xmax, ymin,ymax, zmin,zmax = image_domains
+    if xmin is not None:
+      cmd1 += " image_xmin=%.1f image_xmax=%.1f image_ymin=%.1f image_ymax=%.1f " % (
+          xmin,xmax,ymin,ymax)
+    if zmin is not None:
+      cmd1 += " image_zmin=%.1f image_zmax=%.1f " % (zmin,zmax)
+    return cmd + cmd1+CheckPrevCmdResultCShellScript(cmd1)
 
   def CmdMigrationPerShot(self, ish, image_domains = (None,)*6):
     '''Generate shell cmd for doing the migration.
@@ -235,38 +298,17 @@ class WeiScriptor:
     prefix = self.param_reader.prefix
     self.fnt_imgh = '%s/imgh-%s-%04d.H' % (path_tmp,prefix,ish)
     self.fnt_imgh_list.append(self.fnt_imgh)
-    wem_bin_path = self.dict_args['TANG_BIN']
-    cmd += "%s/bwi-wem3d-Zh.x %s %s mode=imgadj crec=%s csou=%s bimg=%s bvel=%s datapath=%s/ memchk=n report=y " % (
-        wem_bin_path, self.dict_args['MIG_PAR_WAZ3D'], self.dict_args['SS_OFFSET_PAR'], self.fnt_crec, self.fnt_csou, self.fnt_imgh,self.fnt_bvel, path_tmp)
+    cmd1 = "time %s/bwi-wem3d-Zh.x %s %s mode=imgadj crec=%s csou=%s bimg=%s bvel=%s datapath=%s/ " % (
+        self.dict_args['TANG_BIN'], self.dict_args['MIG_PAR_WAZ3D'], self.dict_args['SS_OFFSET_PAR'], self.fnt_crec, self.fnt_csou, self.fnt_imgh,self.fnt_bvel, path_tmp)
     xmin, xmax = image_domains[0:2]
     ymin, ymax = image_domains[2:4]
     zmin, zmax = image_domains[4:6]
     if xmin is not None:
-      cmd += " image_xmin=%.1f image_xmax=%.1f image_ymin=%.1f image_ymax=%.1f " % (
+      cmd1 += " image_xmin=%.1f image_xmax=%.1f image_ymin=%.1f image_ymax=%.1f " % (
           xmin,xmax,ymin,ymax)
     if zmin is not None:
-      cmd += " image_zmin=%.1f image_zmax=%.1f " % (zmin,zmax)
-    return cmd + CheckPrevCmdResultCShellScript(cmd)
-
-
-  def CmdCombineMultipleOutputSepHFiles(sz_shotrange, local_sepH_list, global_output_filename, combine_pars=""):
-    cmd = '# Combine the results from multiple shots into one.\n'
-    path_out = self.param_reader.path_out
-    prefix = self.param_reader.prefix
-    n = len(local_sepH_list)
-    if n == 1:
-      cmd1 = "time Cp %s %s\n" % (local_sepH_list[0],global_output_filename)
-    else:
-      fn_tflist = "%s/%s-%s.flist"%(path_out,prefix,sz_shotrange)
-      fp_tflist = open(fn_tflist,"w")
-      fp_tflist.write("\n".join(local_sepH_list))
-      fp_tflist.close()
-      #axis 3,4,5 are (x,y,z)
-      cmd1 = "time %s/Combine.x <%s filelist=%s output=%s %s \n" % (
-          dict_args['YANG_BIN'],local_sepH_list[0],fn_tflist, global_output_filename,combine_pars)
-    # The combine process could go wrong, therefore add a conditional clause
-    cmd += (cmd1+CheckPrevCmdResultCShellScript(cmd1))
-    return cmd
+      cmd1 += " image_zmin=%.1f image_zmax=%.1f " % (zmin,zmax)
+    return cmd + cmd1+CheckPrevCmdResultCShellScript(cmd1)
 
   def CmdBornModelingPerShot(self, ish):
     cmd = '# Do born modeling for the current shot.\n' 
@@ -282,11 +324,6 @@ class WeiScriptor:
           wem_bin_path, self.dict_args['MIG_PAR_WAZ3D'], self.dict_args['GEOM_GXY'], self.fnt_crec, self.fnt_csou, self.fnt_bimgh,self.fnt_bvel, path_tmp)
     return cmd + cmd1+CheckPrevCmdResultCShellScript(cmd1)
 
-  def ConceiveCommand(self, ish):
-    '''Conceive all the cmd that will be used in the script.'''
-    self.fnt_crec = "crec-%04d.H" % ish
-    pass
-
   def CmdCpbvelForEachJob(self):
     cmd = '# Copy the velocity file to local disk.\n'
     fn_v3d = self.param_reader.fn_v3d
@@ -299,10 +336,19 @@ class WeiScriptor:
   def CmdCpbimgForEachJob(self):
     cmd = '# Copy the background image(reflectivity model) file to local disk.\n'
     path_tmp = self.param_reader.path_tmp
-    self.fn_bimgh = abspath(self.dict_args["bimgh"])
-    self.fnt_bimgh = '%s/bimgh-%s.H' % (path_tmp,self.sz_shotrange)
+    self.fn_bimg = abspath(self.dict_args["bimg"])
+    self.fnt_bimg = '%s/bimg-%s.H' % (path_tmp,self.sz_shotrange)
     # For cping base imgh to local folder.
-    cmd1 = "time Cp <%s >%s datapath=%s/" % (self.fn_bimgh,self.fnt_bimgh, path_tmp)
+    cmd1 = "time Cp <%s >%s datapath=%s/" % (self.fn_bimg,self.fnt_bimg, path_tmp)
+    return cmd + cmd1+CheckPrevCmdResultCShellScript(cmd1)
+
+  def CmdCpdimgForEachJob(self):
+    cmd = '# Copy the image perturbation file to local disk.\n'
+    path_tmp = self.param_reader.path_tmp
+    self.fn_dimg = abspath(self.dict_args["dimg"])
+    self.fnt_dimg = '%s/dimg-%s.H' % (path_tmp,self.sz_shotrange)
+    # For cping base imgh to local folder.
+    cmd1 = "time Cp <%s >%s datapath=%s/" % (self.fn_dimg,self.fnt_dimg, path_tmp)
     return cmd + cmd1+CheckPrevCmdResultCShellScript(cmd1)
 
   def CmdCpbvelForEachJob(self):
@@ -317,13 +363,14 @@ class WeiScriptor:
     '''Copy the related crec binaries (e.g. data) to local folder, this applies to
     the imaging case not modeling case.'''
     cmd = '# Copy the data of current shot to local disk.\n'
-    path_tmp = self.path_tmp
+    path_tmp = self.param_reader.path_tmp
+    self.fnt_crec = '%s/crec-model-%04d.H' % (path_tmp,ish)
     ws_wnd_f, ws_wnd_n = self.param_reader.ws_wnd_f, self.param_reader.ws_wnd_n
-    if self.ws_wnd_n is not None:
+    if ws_wnd_n is not None:
       cmd1 = "Window3d <%s f3=%d n3=%d >%s squeeze=n datapath=%s/ " % (
-          fn_shot_crec, self.ws_wnd_f, self.ws_wnd_n, self.fnt_crec, path_tmp)
+          fn_shot_crec, ws_wnd_f, ws_wnd_n, self.fnt_crec, path_tmp)
     else:
-      cmd1 = "Cp %s %s datapath=$%s/ "% (fn_shot_crec,fnt_crec, path_tmp)
+      cmd1 = "Cp %s %s datapath=%s/ "% (fn_shot_crec,self.fnt_crec, path_tmp)
     return cmd + cmd1+CheckPrevCmdResultCShellScript(cmd1)
 
   def CmdCsouForEachShot(self,ish):
@@ -374,7 +421,7 @@ class PbsSubmitter:
     else:
       self._user_name = user
     if total_jobs_cap is None:
-      self._total_jobs_cap = 10000  # Number should be big enough.
+      self._total_jobs_cap = 80  # Can have at most 60 jobs on the cluster.
     else:
       self._total_jobs_cap = total_jobs_cap
 
@@ -387,7 +434,8 @@ class PbsSubmitter:
       if not grep_pattern:
         cmd = "qstat -a | grep %s | wc -l " % (self._user_name)
       else:
-        cmd = "qstat -a | grep %s | grep %s | wc -l " % (self._user_name, grep_pattern)
+        # Due to the column width constrain from qstat display, only maximum of 15 chars in grep_pattern(job name basically) will be shown.
+        cmd = "qstat -a | grep %s | grep %s | wc -l " % (self._user_name, grep_pattern[0:15])
       stat1,out1=commands.getstatusoutput(cmd)
       if int(out1) > 0:
         icnt += 1
@@ -424,7 +472,7 @@ class PbsSubmitter:
                           (fn_script, queue_name))
         stat1, out1 = commands.getstatusoutput(cmd1)
         if stat1 != 0:
-          err("submit job failed, msg=%d,%s" % (stat1,out1))
+          sepbase.err("submit job failed, msg=%d,%s" % (stat1,out1))
         os.system("sleep 15")  # Stagger the job start-off time a bit.
         break
       else:
@@ -437,4 +485,32 @@ class PbsSubmitter:
           # Then start polling the first queue again.
           i_queue = 0
     return
+
+
+
+def OverlapRectangle(rect1,rect2):
+  '''Compute the overlap between two rectangles.
+  the elements in rect2 can be empty.
+  '''
+  xmin_1,xmax_1,ymin_1,ymax_1 = rect1
+  xmin_2,ymax_2,ymin_2,ymax_2 = rect2
+  if xmin_2 is not None:
+    xmin_1 = max(xmin_1,xmin_2); xmax_1 = min(xmax_1,xmax_2)
+  if ymin_2 is not None:
+    ymin_1 = max(ymin_1,ymin_2); ymax_1 = min(ymax_1,ymax_2)
+  assert xmin_1 <= xmax_1 and ymin_1 <= ymax_1
+  return [xmin_1,xmax_1,ymin_1,ymax_1]
+
+
+def UnionRectangle(rect1, rect2):
+  '''Compute the union of two rectangles (The smallest rectangle that can fully cover both input rects), returns also an rectangle.
+  The elements in rect2 can be empty.
+  '''
+  xmin_1,xmax_1,ymin_1,ymax_1 = rect1
+  xmin_2,xmax_2,ymin_2,ymax_2 = rect2
+  if xmin_2 is not None:
+    xmin_1 = min(xmin_1,xmin_2); xmax_1 = max(xmax_1,xmax_2)
+  if ymin_2 is not None:
+    ymin_1 = min(ymin_1,ymin_2); ymax_1 = max(ymax_1,ymax_2)
+  return [xmin_1,xmax_1,ymin_1,ymax_1]
 

@@ -60,14 +60,14 @@ if __name__ == '__main__':
     xmin -= aper_x_extra; xmax += aper_x_extra
     ymin -= aper_y_extra; ymax += aper_y_extra
     lines_output.append("%s %5.3f %5.3f %5.3f %5.3f" % (file_name_full,xmin,xmax,ymin,ymax))
-    print file_cnt,":%s"%(lines_output[file_cnt-1])
+    print "%d: %s" % (file_cnt, lines_output[file_cnt-1])
   
   # Now write out the first two lines of file.
   offest = "y"
   if not b_marine: offset = "n"
   line1 = "%d bMarineGeom=%s singleSrcFileForAllShots=y \n" % (file_cnt,offset)
   line2 = "fname_data xmin xmax ymin ymax \n"
-  fp_o = open(fn_shotsInfo,"w")
+  fp_o = open(fn_shotsinfo,"w")
   fp_o.write(line1+line2)
   fp_o.writelines("\n".join(lines_output))
   fp_o.write("\n")

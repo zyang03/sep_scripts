@@ -16,7 +16,7 @@ def self_doc():
 
 
 def Run(argv):
-  eq_args_from_cmdline,args=sepbase.parse_args(argv[1:])
+  eq_args_from_cmdline,args = sepbase.parse_args(argv[1:])
   dict_args = sepbase.RetrieveAllEqArgs(eq_args_from_cmdline)
   param_reader = pbs_util.JobParamReader(dict_args)
   pbs_script_creator = pbs_util.PbsScriptCreator(param_reader)
@@ -27,7 +27,7 @@ def Run(argv):
   n = param_reader.nfiles_perjob
   path_out = param_reader.path_out
   path_tmp = param_reader.path_tmp
-  # Get the velocity file and the shotsInfo file, etc.
+  # Get the velocity file.
   fn_csou = param_reader.fn_csou
   fn_v3d = param_reader.fn_v3d
   ishot_list, nshot_list = pbs_util.GenShotsList(param_reader)

@@ -3,23 +3,23 @@ import commands,os,sys
 import pbs_util
 import sepbase
 
-## This program will try to batch generate migration images (not limited to migrations).
-## Basically, it performs wei jobs that can be parallellized in the granularity of individual shots.
+def self_doc():
+  print 
+  print 
 
-# Usage1:    *.py param=waz3d.param pbs_template=pbs_script_tmpl.sh nfiles=1001 nfiles_perbatch=10 path=path_out prefix=hess-waz3d queue=q35 nnodes=0 njobmax=5 ish_beg=0 prefix=pf img=img_output.H
-# Usage2:     User can also supply a list of ish_begs to start with
-#             *.py ... ish_beglist=? ...
+## This program will try to batch generate velocity updates from wave-equation tomography operator.
+# Usage1:    *.py param=waz3d.param pbs_template=pbs_script_tmpl.sh nfiles=1001 nfiles_perbatch=10 path=path_out prefix=hess-waz3d queue=q35 nnodes=0 njobmax=5 ish_beg=0 vel=vel.H dimg=dimg.H prefix=pf dvel=output.H
 
 def Run(argv):
   print "Run script with params:", argv
   eq_args_from_cmdline,args = sepbase.parse_args(argv[1:])
   dict_args = sepbase.RetrieveAllEqArgs(eq_args_from_cmdline)
   param_reader = pbs_util.WeiParamReader(dict_args)
-  print dict_args
   prefix = dict_args['prefix']
-  fn_imgh_final  = os.path.abspath(dict['img'])
-  datapath_final, fn_imgh_final_basename = os.path.split(fn_imgh_final)
-  fn_base_wo_ext = os.path.splitext(fn_imgh_final_basename)[0]
+  fn_dvel_final  = os.path.abspath(dict_args['dvel'])  # Final output (after stacking over all jobs).
+  _, fn_final_basename = os.path.split(fn_dvel_final)
+  fn_base_wo_ext = os.path.splitext(fn_final_basename)[0]
+  # fn_base_wo_ext serves as a unique identifier.
   N = param_reader.nfiles
   n = param_reader.nfiles_perjob
   path_out = param_reader.path_out
@@ -36,31 +36,33 @@ def Run(argv):
   wei_scriptor = pbs_util.WeiScriptor(param_reader)
   assert param_reader.queues[0] != 'default'  # Put sep queue ahead of the default queue.
   pbs_submitter = pbs_util.PbsSubmitter(zip(param_reader.queues, param_reader.queues_cap), param_reader.njobs_max, dict_args['user'])
-  # See if specify image/Hessian dimensions in cmdline
+  # See if specify image/Hessian/dvel dimensions in cmdline
   [xmin_cmdl,xmax_cmdl, ymin_cmdl,ymax_cmdl, zmin_cmdl,zmax_cmdl] = param_reader.g_output_image_domain
   # Main submission loop.
   AllFilesComputed = False
   while not AllFilesComputed:
     pbs_submitter.WaitOnAllJobsFinish()
     AllFilesComputed = True
-    fn_imgh_list_all = []
+    fn_output_list_all = []  # Store names of all output files (one for each job)
     for ish,nsh in zip(ishot_list, nshot_list):  # For each job
       sz_shotrange = "%04d_%04d" % (ish,ish+nsh)
       wei_scriptor.NewJob(sz_shotrange)
-      fn_imgh  = "%s/%s-%s.H"  %(path_out, fn_base_wo_ext, sz_shotrange)
-      fn_imgh_list_all.append(fn_imgh)
+      fn_output  = "%s/%s-%s.H"  %(path_out, fn_base_wo_ext, sz_shotrange)
+      fn_output_list_all.append(fn_output)
       # Here check if it has already been precomputed, if so, we can skip this file.
-      file_error = pbs_util.CheckSephFileError(fn_imgh,False)
+      file_error = pbs_util.CheckSephFileError(fn_output,False)
       if file_error == 0:
-        print "fn_imgh file is good, skip: %s" % fn_imgh
+        print "Current fn_output is good, skip: %s" % fn_output
         continue
-      else:
-        if file_error == 1:
-          print "! fn_imgh file is invalid (NaN): %s" % fn_imgh
+      elif file_error == 1:
+        print "! fn_output is invalid (NaN): %s" % fn_output
+      else: pass
+      # Needs to [re-]compute this job.
       AllFilesComputed = False
       # Append commands to the end of the created script file
       scripts = []
-      scripts.append(wei_scriptor.CmdCpbvelForEachJob()+'\n\n')    
+      scripts.append(wei_scriptor.CmdCpbvelForEachJob()+'\n')
+      scripts.append(wei_scriptor.CmdCpdimgForEachJob()+'\n\n')
       xmin_g = xmax_g = ymin_g = ymax_g = None
       # Do nfiles_per_batch shots at once
       for ii in range(0,nsh):
@@ -72,36 +74,43 @@ def Run(argv):
         xmin_1, xmax_1, ymin_1, ymax_1 = shots_info.ShotFileApertureAt(ishl)
         # Find the overlap between 1shot imaging aperture and the final imaging domain
         xmin_1,xmax_1,ymin_1,ymax_1 = pbs_util.OverlapRectangle([xmin_1,xmax_1,ymin_1,ymax_1],[xmin_cmdl,xmax_cmdl,ymin_cmdl,ymax_cmdl])
-        # Calculate the image/Hessian/Data with subsurf offset.
-        cmd2 = wei_scriptor.CmdMigrationPerShot(ishl,
+        cmd2 = wei_scriptor.CmdWetomoPerShot(ishl,
             (xmin_1,xmax_1, ymin_1,ymax_1, zmin_cmdl,zmax_cmdl))
         scripts.append(cmd2+ "\n");
         xmin_g,xmax_g,ymin_g,ymax_g = pbs_util.UnionRectangle([xmin_1,xmax_1,ymin_1,ymax_1],[xmin_g,xmax_g,ymin_g,ymax_g])
-      # End for ishl. Now copy the results cubes out, if multiple shots then combine them first
-      fnt_imgh_list = wei_scriptor.fnt_imgh_list
-      # For fn_imgh, Axis 3,4,5 are (x,y,z)
+      # end for ish,nsh
+      # Now copy the results cubes out, if multiple shots then combine them first
+      fnt_output_list = wei_scriptor.fnt_dvel_list
+      # For fn_dvel, Axis 1,2,3 are (x,y,z)
       scripts.append(
           pbs_script_creator.CmdCombineMultipleOutputSephFiles(
-              fnt_imgh_list, fn_imgh,
-              "oe3=%g,%g oe4=%g,%g ndim=5" % (xmin_g,xmax_g,ymin_g,ymax_g), path_out))
+              fnt_output_list, fn_output,
+              "oe1=%g,%g oe2=%g,%g ndim=3" % (xmin_g,xmax_g,ymin_g,ymax_g)))
       scripts.append(pbs_script_creator.CmdFinalCleanUpTempDir())
       pbs_script_creator.CreateScriptForNewJob(sz_shotrange)
       pbs_submitter.SubmitJob(pbs_script_creator.AppendScriptsContent(scripts))
     # end for ish,nsh
-  # end for while
-  # Now combine all imgh files together, use a new pbs_submitter, need to use the non-default queue.
-  pbs_submitter = pbs_util.PbsSubmitter([(param_reader.queues[0], param_reader.queues_cap[0])], param_reader.njobs_max, dict_args['user'])
-  scripts = []
-  combine_pars = ""
+  # end while not AllFilesComputed
+  # Now combine all dvel files together, use a new pbs_submitter, need to use the non-default queue.
+  pbs_submitter = pbs_util.PbsSubmitter([(param_reader.queues[0], param_reader.queues_cap[0])], None, dict_args['user'])
+  print fn_output_list_all
+  scripts = []; combine_pars = ""
   if xmin_cmdl is not None:
-    combine_pars = "oe3=%g,%g oe4=%g,%g ndim=5" % (xmin_cmdl,xmax_cmdl,ymin_cmdl,ymax_cmdl)
+    combine_pars = "oe1=%g,%g oe2=%g,%g ndim=3" % (xmin_cmdl,xmax_cmdl,ymin_cmdl,ymax_cmdl)
   scripts.append(pbs_script_creator.CmdCombineMultipleOutputSephFiles(
-      fn_imgh_list_all, fn_imgh_final, combine_pars, datapath_final))
-  pbs_script_creator.CreateScriptForNewJob("%s" % fn_base_wo_ext)
+      fn_output_list_all, fn_dvel_final, combine_pars))
+  pbs_script_creator.CreateScriptForNewJob(fn_base_wo_ext)
   pbs_submitter.SubmitJob(pbs_script_creator.AppendScriptsContent(scripts))
-  pbs_submitter.WaitOnAllJobsFinish()
+  pbs_submitter.WaitOnAllJobsFinish(fn_base_wo_ext)
+  # Check if the output is valid.
+  file_error = pbs_util.CheckSephFileError(fn_dvel_final,True)
+  if file_error == 0:
+    print "Output file is good: %s" % fn_dvel_final
+  elif file_error == 1:
+    assert False, "! fn_output is invalid (NaN): %s" % fn_output
+  else:
+    assert False, "! fn_output is invalid: %s" % fn_output
   return
-
 
 if __name__ == '__main__':
   Run(sys.argv)
