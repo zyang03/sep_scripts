@@ -173,7 +173,7 @@ def find_files(args,eqs):
         eqs["store%d"%count]="IN_BYTE"
       if eqs["type%d"%count]=="SEP":
         if not pars_exist("g",eqs):
-          get_sep_params(arg,eqs,"g")
+          get_sep_axes_params(arg,eqs,"g")
       elif eqs["type%d"%count]=="SEISPAK":
         get_seispak_params(arg,eqs,count)
         if not pars_exist("g",eqs):

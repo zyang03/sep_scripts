@@ -10,6 +10,19 @@ import calc_wemva_objfunc as wemva_obj
 
 # Usage: *.py param=waz3d.param pbs_template=pbs_script_tmpl.sh nfiles=1001 nfiles_perjob=10 path=path_out prefix=waz3d queues=q35,default nnodes=0 njobmax=5 ish_beg=0 vel=vel.H niter=10 iiter=0 path_iter=path_to_save_results_per_iteration
 
+def FitParabola(x_coefs, func_vals):
+  '''Given 3 points of (x,y), return the fitted parabola coefs [a,b,c] (ax^2+bx+c).'''
+  x1,x2,x3 = x_coefs
+  y1,y2,y3 = func_vals
+  denom = (x1-x2)*(x1-x3)*(x2-x3)
+  xmax_abs = max([abs(x) for x in x_coefs])
+  assert abs(denom) > xmax_abs*xmax_abs*xmax_abs*1e-6  # Sanity check to avoid divide-by-zero.
+  coef = [0]*3
+  coef[0] = (x3*(y2-y1) + x2*(y1-y3) + x1*(y3-y2)) / denom;
+  coef[1] = (x3*x3*(y1-y2) + x2*x2*(y3-y1) + x1*x1*(y2-y3)) / denom;
+  coef[2] = (x2*x3*(x2-x3)*y1 + x3*x1*(x3-x1)*y2 + x1*x2*(x1-x2)*y3)/denom;
+  return coef
+
 def ComputeOptimalStepSize(alpha1,alpha2,costfunc0,costfunc1,costfunc2):
   '''Given the objectfunction values at 3 trail pts, with 0,alpha1,alpha2 as the stepsize,
   return the optimal stepsize that minimize the cost functions).'''
@@ -38,19 +51,6 @@ def ComputeOptimalStepSize(alpha1,alpha2,costfunc0,costfunc1,costfunc2):
     else:
       pass
   return opt_stepsize
-
-def FitParabola(x_coefs, func_vals):
-  '''Given 3 points of (x,y), return the fitted parabola coefs [a,b,c] (ax^2+bx+c).'''
-  x1,x2,x3 = x_coefs
-  y1,y2,y3 = func_vals
-  denom = (x1-x2)*(x1-x3)*(x2-x3)
-  xmax_abs = max([abs(x) for x in x_coefs])
-  assert abs(denom) > xmax_abs*xmax_abs*xmax_abs*1e-6  # Sanity check to avoid divide-by-zero.
-  coef = [0]*3
-  coef[0] = (x3*(y2-y1) + x2*(y1-y3) + x1*(y3-y2)) / denom;
-  coef[1] = (x3*x3*(y1-y2) + x2*x2*(y3-y1) + x1*x1*(y2-y3)) / denom;
-  coef[2] = (x2*x3*(x2-x3)*y1 + x3*x1*(x3-x1)*y2 + x1*x2*(x1-x2)*y3)/denom;
-  return coef
 
 def GenCmdlineArgsFromDict(eq_args):
   '''Return a long string that contains all key=val pairs in eq_args.'''
@@ -82,11 +82,12 @@ if __name__ == '__main__':
     fn_vn = "%s-velnew.H" % fn_prefix
     if pbs_util.CheckSephFileError(fn_v1,False)==0:
       # Further extra stepsize info (alpha)
-      str_alphas = get_sep_his_par("alphas")
+      str_alphas = sepbase.get_sep_his_par("stepsizes")
       if str_alphas:  # We can start from iter+1 instead of the very begining.
         alpha = str_alphas.split(',')[-1]
         iter_beg = iter+1
-      break
+        fn_v = fn_vn  # Set the existing fn_vn as the starting velocity model.
+        break
   # The main inversion loop.
   for iter in range(iter_beg, niter):
     # Calc I(v_k) and J_k, and gradient g_k (i.e. fn_dv)
@@ -147,7 +148,7 @@ if __name__ == '__main__':
     assert pbs_util.CheckSephFileError(fn_vn,False)==0
     # Write the alpha and objfuncs history to fn_vn
     fp = open(fn_vn,'a');
-    fp.write("alphas=%s\n" % ','.join(["%g"%x for x in alphas]))
+    fp.write("stepsizes=%s\n" % ','.join(["%g"%x for x in alphas]))
     fp.write("objfuncs=%s\n" % ','.join(["%g"%x for x in objfuncs]))
     fp.close()
     # Update v_{k+1} := v_k.
@@ -157,4 +158,5 @@ if __name__ == '__main__':
   print "!Finished. The final inverted model is saved at: %s" % os.path.abspath(fn_v)
   print 'objfuncs=','\t'.join(["%g" % val for val in objfuncs])
   print 'stepsizes=','\t'.join(["%g" % val for val in alphas])
+
 
