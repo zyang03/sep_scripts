@@ -12,10 +12,10 @@ import sepbase
 # The underlying binary calling format:
 # CalcWemvaObjFunc.x img=image.H [dimg=dimg.H] b3D=n wemva_type=61 
 
-def CalcWemvaObjFunc(argv):
+def Run(argv):
   '''Return the value of objective function calcualted.'''
   print "Run script with params:", argv
-  eq_args_from_cmdline,args = sepbase.parse_args(argv[1:])
+  eq_args_from_cmdline,args = sepbase.parse_args(argv)
   dict_args = sepbase.RetrieveAllEqArgs(eq_args_from_cmdline)
   param_reader = pbs_util.JobParamReader(dict_args)
   prefix = param_reader.prefix
@@ -42,8 +42,9 @@ def CalcWemvaObjFunc(argv):
   file_error = pbs_util.CheckSephFileError(fn_img,False)
   assert file_error == 0, "The input file: %s is incorrect: %d" % (fn_img, file_error)
   while True:
-    pbs_submitter.WaitOnAllJobsFinish(fn_img_base_wo_ext)
-    pbs_script_creator.CreateScriptForNewJob(fn_img_base_wo_ext)
+    job_identifier = 'objf-'+fn_img_base_wo_ext
+    pbs_submitter.WaitOnAllJobsFinish(job_identifier)
+    pbs_script_creator.CreateScriptForNewJob(job_identifier)
     # First check the log file of the last run to determine whether the input has been successful
     fn_log = pbs_script_creator.fn_log
     ## See if we've finished the computation and get meaningful result already, if so will exit the loop
@@ -84,5 +85,5 @@ def CalcWemvaObjFunc(argv):
 
 
 if __name__ == '__main__':
-  print 'objfunc_value = %g' % CalcWemvaObjFunc(sys.argv)
+  print 'objfunc_value = %g' % Run(sys.argv)
 

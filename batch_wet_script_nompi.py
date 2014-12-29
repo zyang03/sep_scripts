@@ -12,7 +12,7 @@ def self_doc():
 
 def Run(argv):
   print "Run script with params:", argv
-  eq_args_from_cmdline,args = sepbase.parse_args(argv[1:])
+  eq_args_from_cmdline,args = sepbase.parse_args(argv)
   dict_args = sepbase.RetrieveAllEqArgs(eq_args_from_cmdline)
   param_reader = pbs_util.WeiParamReader(dict_args)
   prefix = dict_args['prefix']
@@ -38,6 +38,10 @@ def Run(argv):
   pbs_submitter = pbs_util.PbsSubmitter(zip(param_reader.queues, param_reader.queues_cap), param_reader.njobs_max, dict_args['user'])
   # See if specify image/Hessian/dvel dimensions in cmdline
   [xmin_cmdl,xmax_cmdl, ymin_cmdl,ymax_cmdl, zmin_cmdl,zmax_cmdl] = param_reader.g_output_image_domain
+  # First check if the final dvel exists, if so we can return the result directly.
+  if pbs_util.CheckSephFileError(fn_dvel_final,False)==0:
+    print "final dvel already in place, skip: %s" % fn_dvel_final
+    return
   # Main submission loop.
   AllFilesComputed = False
   while not AllFilesComputed:
@@ -80,14 +84,14 @@ def Run(argv):
         xmin_g,xmax_g,ymin_g,ymax_g = pbs_util.UnionRectangle([xmin_1,xmax_1,ymin_1,ymax_1],[xmin_g,xmax_g,ymin_g,ymax_g])
       # end for ish,nsh
       # Now copy the results cubes out, if multiple shots then combine them first
-      fnt_output_list = wei_scriptor.fnt_dvel_list
+      fnt_output_list = wei_scriptor.fnt_output_list
       # For fn_dvel, Axis 1,2,3 are (x,y,z)
       scripts.append(
           pbs_script_creator.CmdCombineMultipleOutputSephFiles(
               fnt_output_list, fn_output,
               "oe1=%g,%g oe2=%g,%g ndim=3" % (xmin_g,xmax_g,ymin_g,ymax_g)))
       scripts.append(pbs_script_creator.CmdFinalCleanUpTempDir())
-      pbs_script_creator.CreateScriptForNewJob(sz_shotrange)
+      pbs_script_creator.CreateScriptForNewJob('%s-%s'%(fn_base_wo_ext,sz_shotrange))
       pbs_submitter.SubmitJob(pbs_script_creator.AppendScriptsContent(scripts))
     # end for ish,nsh
   # end while not AllFilesComputed

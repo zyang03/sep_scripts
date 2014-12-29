@@ -60,6 +60,11 @@ def parse_args(args):
        aout.append(arg)
   return eqs,aout   
 
+def get_sep_his_par(file, par):
+  """Return the par=? term from the .H file."""
+  stat1,out1=commands.getstatusoutput("%s/Get parform=no <%s %s"%(sepbin,file,par))
+  assert stat1==0, err("!Trouble reading param %s from file %s" % (par, file))
+  return out1
 
 def get_sep_axis_params(file, iaxis):
   """Note that iaxis is 1-based, returns a list of *strings* [n,o,d,label]."""
@@ -69,13 +74,13 @@ def get_sep_axis_params(file, iaxis):
   stat4,out4=commands.getstatusoutput("%s/Get parform=no <%s label%d"%(sepbin,file,iaxis))
   if stat1:
     err("Trouble reading parameters about axis%d from %s" % (iaxis, file))
-  if len(out1)==0:out1="1"
-  if len(out2)==0:out2="0"
-  if len(out3)==0:out3="1"
-  if len(out4)==0:out4=" "
+  if len(out1)==0: out1="1"
+  if len(out2)==0: out2="0"
+  if len(out3)==0: out3="1"
+  if len(out4)==0: out4=" "
   return [out1, out2, out3, out4]
 
-def get_sep_params(file,par,suffix):
+def get_sep_axes_params(file,par,suffix):
   """par is a dictionary (both as input and as returned value) containing keys like 
   nsuffix_1, osuffix_1 etc."""
   for i in range(0,7):
@@ -202,7 +207,9 @@ def find_files(args,eqs):
 
 import ConfigParser
 
-def RunShellCmd(cmd):
+def RunShellCmd(cmd, print_cmd=False):
+  if print_cmd:
+    print "RunShellCmd: %s" % cmd
   stat1,out1=commands.getstatusoutput(cmd)
   if stat1 != 0:
     assert False, 'Shell cmd Failed: %s!' % out1

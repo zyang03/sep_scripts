@@ -153,7 +153,7 @@ class JobParamReader:
 class ParallelParamReader(JobParamReader):
   '''A subclass that read extra parameters about job parallelization, mostly through sharding the input data.'''
   def __init__(self, dict_args):
-    super(ParallelParamReader,self).__init__(dict_args)
+    JobParamReader.__init__(self, dict_args)
     self.nfiles = int(dict_args['nfiles'])  # Total number of shots to simulate/generate/compute.
     self.nfiles_perjob = int(dict_args.get("nfiles_perjob", 1))
     assert dict_args.get("nfiles_perbatch") is None, 'Obsolete option nfiles_perbatch!!'
@@ -161,7 +161,7 @@ class ParallelParamReader(JobParamReader):
     
 class WeiParamReader(ParallelParamReader):
   def __init__(self, dict_args):
-    super(WeiParamReader,self).__init__(dict_args)  # Call base class constructor.
+    ParallelParamReader.__init__(self, dict_args)  # Call base class constructor.
     # Get the velocity file, csou file and filename prefix for intermediate files.
     self.source_type = dict_args.get("source_type", "plane")
     self.fn_csou = abspath(dict_args["csou"])
@@ -192,10 +192,32 @@ class PbsScriptCreator:
     self.param_reader = param_reader
     self.dict_args = param_reader.dict_args
     self.user = self.dict_args['user']
+    self._starting_new_script = False
+    self._job_filename_stem = None
 
-  def AppendScriptsContent(scripts):
+  def AppendScriptsContent(self, scripts):
     '''Append the list of lines in 'scripts' to the underlying script file.
     Returns the script file name.'''
+    if self._starting_new_script:  # Create the new script
+      self._starting_new_script = False
+      fname_template_script = self.param_reader.fname_template_script
+      cmd1 = "cp %s %s" % (fname_template_script, self.fn_script)
+      sepbase.RunShellCmd(cmd1)
+      nnodes = int(self.dict_args.get('nnodes',1))  # By default, use one node per job
+      if nnodes != 0:  # Need to change the number of nodes used for this job
+        cmd1 = ("sed -i 's/#PBS\ -l\ nodes=1/#PBS\ -l\ nodes=%d/g'   %s" %
+                (nnodes, self.fn_script))
+        sepbase.RunShellCmd(cmd1)
+      # Change jobname for better readability.
+      cmd0 = "sed -i '/#PBS -N/c\#PBS -N %s' %s" % (
+          self._job_filename_stem, self.fn_script)
+      # Redirect PBS output, change the entire PBS -o and -e line
+      cmd1 = "sed -i '/#PBS -o/c\#PBS -o %s' %s" % (
+          self.fn_log, self.fn_script)
+      cmd2 = "sed -i '/#PBS -e/c\#PBS -e %s' %s" % (
+          self.fn_log, self.fn_script)  
+      sepbase.RunShellCmd(cmd0+'\n'+cmd1+'\n'+cmd2)
+    # Then write the content in scripts.
     fp_o = open(self.fn_script,'a'); fp_o.writelines(scripts); fp_o.close()
     return self.fn_script
 
@@ -207,27 +229,16 @@ class PbsScriptCreator:
 
   def CreateScriptForNewJob(self, script_filename_stem):
     """Construct the pbs script from script_template.
+    The actual script file write happens when you call the first AppendScriptsContent() after calling this funciton.
     Args:
       script_filename_stem: The basename (without extension) for the new script name.
       """
+    self._starting_new_script = True
+    self._job_filename_stem = script_filename_stem
     path_out = self.param_reader.path_out
     prefix = self.param_reader.prefix
-    fname_template_script = self.param_reader.fname_template_script
     self.fn_script = '%s/%s-%s.sh' % (path_out, prefix, script_filename_stem)
     self.fn_log = '%s/%s-%s.log' % (path_out, prefix, script_filename_stem)
-    cmd1 = "cp %s %s" % (fname_template_script, self.fn_script)
-    sepbase.RunShellCmd(cmd1)
-    nnodes = int(self.dict_args.get('nnodes',1))  # By default, use one node per job
-    if nnodes != 0:  # Need to change the number of nodes used for this job
-      cmd1 = ("sed -i 's/#PBS\ -l\ nodes=1/#PBS\ -l\ nodes=%d/g'   %s" %
-              (nnodes, self.fn_script))
-      sepbase.RunShellCmd(cmd1)
-    # Change jobname for better readability.
-    cmd0 = "sed -i '/#PBS -N/c\#PBS -N %s' %s" % (script_filename_stem, self.fn_script)
-    # Redirect PBS output, change the entire PBS -o and -e line
-    cmd1 = "sed -i '/#PBS -o/c\#PBS -o %s' %s" % (self.fn_log, self.fn_script)
-    cmd2 = "sed -i '/#PBS -e/c\#PBS -e %s' %s" % (self.fn_log, self.fn_script)  
-    sepbase.RunShellCmd(cmd0+'\n'+cmd1+'\n'+cmd2)
     return
 
   def CmdCombineMultipleOutputSephFiles(self, local_seph_list, output_fn, combine_pars="", datapath=None):
@@ -269,7 +280,7 @@ class WeiScriptor:
     self.sz_shotrange = sz_shotrange
     path_out = self.param_reader.path_out
     prefix = self.param_reader.prefix
-    self.fnt_imgh_list = []
+    self.fnt_output_list = []
     return
 
   def CmdWetomoPerShot(self, ish, image_domains = (None,)*6):
@@ -297,7 +308,7 @@ class WeiScriptor:
     path_tmp = self.param_reader.path_tmp
     prefix = self.param_reader.prefix
     self.fnt_imgh = '%s/imgh-%s-%04d.H' % (path_tmp,prefix,ish)
-    self.fnt_imgh_list.append(self.fnt_imgh)
+    self.fnt_output_list.append(self.fnt_imgh)
     cmd1 = "time %s/bwi-wem3d-Zh.x %s %s mode=imgadj crec=%s csou=%s bimg=%s bvel=%s datapath=%s/ " % (
         self.dict_args['TANG_BIN'], self.dict_args['MIG_PAR_WAZ3D'], self.dict_args['SS_OFFSET_PAR'], self.fnt_crec, self.fnt_csou, self.fnt_imgh,self.fnt_bvel, path_tmp)
     xmin, xmax = image_domains[0:2]
@@ -440,7 +451,7 @@ class PbsSubmitter:
       if int(out1) > 0:
         icnt += 1
         if icnt == 1: print "Wait On All Jobs to Finish..."
-        time.sleep(120)
+        time.sleep(10)
       else:
         break
     return
@@ -451,7 +462,6 @@ class PbsSubmitter:
     i_queue = 0
     while True:
       queue_name, queue_cap = self._queues_info[i_queue]
-      print "In SubmitJob: ", num_queues, i_queue, queue_name, queue_cap
       jobR = 0; jobQ = 0; jobC = 0
       # Check how many jobs are in this queue.
       cmd_template = "qstat -a | grep %s | grep \' %s \' | grep %s | wc -l " 
@@ -513,4 +523,20 @@ def UnionRectangle(rect1, rect2):
   if ymin_2 is not None:
     ymin_1 = min(ymin_1,ymin_2); ymax_1 = max(ymax_1,ymax_2)
   return [xmin_1,xmax_1,ymin_1,ymax_1]
+
+
+class SolverParamReader:
+  '''Hold all solver parameters for wei inversion.'''
+  def __init__(self, dict_args):
+    # Allowed parameter value range for the model space.
+    self.maxval = float(dict_args['maxval'])
+    self.minval = float(dict_args['minval'])
+    # Smoothing parameters, for 1st, 2nd and 3rd axis. (x,y,z) in wei case.
+    self.smooth_rect_sizes = map(int, dict_args['smooth_rect_sizes'].split(','))
+    # smooth_rect_reductions decides how much the smoothing strengh will reduce per iteration.
+    self.smooth_rect_reductions = map(int, dict_args['smooth_rect_reductions'].split(','))
+    assert(len(self.smooth_rect_sizes)==3); assert(len(self.smooth_rect_reductions)==3);
+    self.nrepeat = int(dict_args.get('nrepeat',1))
+    # 'initial_perturb_scale' determines the starting stepsize the inversion will choose to generate trial models, i.e. the starting delta_m = initial_perturb_scale*normalized_grad. Assuming normalized_grad has a RMS of 1.0
+    self.initial_perturb_scale = float(dict_args['initial_perturb_scale'])
 

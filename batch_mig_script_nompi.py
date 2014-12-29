@@ -12,12 +12,11 @@ import sepbase
 
 def Run(argv):
   print "Run script with params:", argv
-  eq_args_from_cmdline,args = sepbase.parse_args(argv[1:])
+  eq_args_from_cmdline,args = sepbase.parse_args(argv)
   dict_args = sepbase.RetrieveAllEqArgs(eq_args_from_cmdline)
   param_reader = pbs_util.WeiParamReader(dict_args)
-  print dict_args
   prefix = dict_args['prefix']
-  fn_imgh_final  = os.path.abspath(dict['img'])
+  fn_imgh_final  = os.path.abspath(dict_args['img'])
   datapath_final, fn_imgh_final_basename = os.path.split(fn_imgh_final)
   fn_base_wo_ext = os.path.splitext(fn_imgh_final_basename)[0]
   N = param_reader.nfiles
@@ -38,6 +37,10 @@ def Run(argv):
   pbs_submitter = pbs_util.PbsSubmitter(zip(param_reader.queues, param_reader.queues_cap), param_reader.njobs_max, dict_args['user'])
   # See if specify image/Hessian dimensions in cmdline
   [xmin_cmdl,xmax_cmdl, ymin_cmdl,ymax_cmdl, zmin_cmdl,zmax_cmdl] = param_reader.g_output_image_domain
+  # First check if the final imgh exists
+  if pbs_util.CheckSephFileError(fn_imgh_final,False)==0:
+    print "final image already in place, skip: %s" % fn_imgh_final
+    return
   # Main submission loop.
   AllFilesComputed = False
   while not AllFilesComputed:
@@ -78,14 +81,14 @@ def Run(argv):
         scripts.append(cmd2+ "\n");
         xmin_g,xmax_g,ymin_g,ymax_g = pbs_util.UnionRectangle([xmin_1,xmax_1,ymin_1,ymax_1],[xmin_g,xmax_g,ymin_g,ymax_g])
       # End for ishl. Now copy the results cubes out, if multiple shots then combine them first
-      fnt_imgh_list = wei_scriptor.fnt_imgh_list
+      fnt_imgh_list = wei_scriptor.fnt_output_list
       # For fn_imgh, Axis 3,4,5 are (x,y,z)
       scripts.append(
           pbs_script_creator.CmdCombineMultipleOutputSephFiles(
               fnt_imgh_list, fn_imgh,
               "oe3=%g,%g oe4=%g,%g ndim=5" % (xmin_g,xmax_g,ymin_g,ymax_g), path_out))
       scripts.append(pbs_script_creator.CmdFinalCleanUpTempDir())
-      pbs_script_creator.CreateScriptForNewJob(sz_shotrange)
+      pbs_script_creator.CreateScriptForNewJob('%s-%s'%(fn_base_wo_ext,sz_shotrange))
       pbs_submitter.SubmitJob(pbs_script_creator.AppendScriptsContent(scripts))
     # end for ish,nsh
   # end for while
