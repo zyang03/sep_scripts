@@ -7,10 +7,6 @@ from sepbase import *
 
 def self_doc():
   print 
-  print 
-  print 
-  print 
-  print 
 
 ## This program does preprocesing for a shY file, expand the #!include statements and create the corresponding sh file
 
