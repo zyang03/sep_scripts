@@ -8,7 +8,9 @@
 *.H
 *log*
 *.HH
-*tmp*
+*tmp
+tmp*
 *.pyc
 .svn
 *.*~
+
