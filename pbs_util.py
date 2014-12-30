@@ -4,7 +4,6 @@ import time
 from os.path import abspath
 from sepbase import line_no
 
-
 def CheckPrevCmdResultCShellScript(prev_cmd):
   '''Return a piece of script that checks the return status of the previous cmd executed in the same script.'''
   cmd = '''
@@ -14,7 +13,6 @@ if ( $status != 0 ) then
 endif
 ''' % (prev_cmd)
   return cmd
-
 
 def CheckSephFileError(fn_seph, check_binary=False):
   '''Check whether a .H file is a valid one, i.e. has 100% of data and has no NaN(not a number) in it.
@@ -215,7 +213,10 @@ class PbsScriptCreator:
       cmd1 = "sed -i '/#PBS -o/c\#PBS -o %s' %s" % (
           self.fn_log, self.fn_script)
       cmd2 = "sed -i '/#PBS -e/c\#PBS -e %s' %s" % (
-          self.fn_log, self.fn_script)  
+          self.fn_log, self.fn_script)
+      # Change the working directory to the output directory
+      cmd2 += "\nsed -i '/#PBS -d/c\#PBS -d %s' %s" % (
+          self.param_reader.path_out, self.fn_script)
       sepbase.RunShellCmd(cmd0+'\n'+cmd1+'\n'+cmd2)
     # Then write the content in scripts.
     fp_o = open(self.fn_script,'a'); fp_o.writelines(scripts); fp_o.close()
@@ -442,11 +443,12 @@ class PbsSubmitter:
       grep_pattern: An optional pattern string that will be used to find all jobs under the given user and matches the grep_pattern.'''
     icnt = 0
     while True:
+      # Exclude the error jobs (' C ') coz these jobs can remain in qstat info for quite some time.
       if not grep_pattern:
-        cmd = "qstat -a | grep %s | wc -l " % (self._user_name)
+        cmd = "qstat -a | grep -v \' C \' | grep %s | wc -l " % (self._user_name)
       else:
         # Due to the column width constrain from qstat display, only maximum of 15 chars in grep_pattern(job name basically) will be shown.
-        cmd = "qstat -a | grep %s | grep %s | wc -l " % (self._user_name, grep_pattern[0:15])
+        cmd = "qstat -a | grep -v \' C \' | grep %s | grep %s | wc -l " % (self._user_name, grep_pattern[0:15])
       stat1,out1=commands.getstatusoutput(cmd)
       if int(out1) > 0:
         icnt += 1
@@ -460,6 +462,7 @@ class PbsSubmitter:
     #Submit the job script to pbs system by looking at if there are enough running jobs
     num_queues = len(self._queues_info)
     i_queue = 0
+    icnt = 0
     while True:
       queue_name, queue_cap = self._queues_info[i_queue]
       jobR = 0; jobQ = 0; jobC = 0
@@ -473,6 +476,7 @@ class PbsSubmitter:
       stat3,out3=commands.getstatusoutput(cmd1)
       
       jobR = int(out1); jobQ = int(out2); jobC = int(out3)
+      jobC = 0  # Just ignore error jobs at this moment.
       print "jobs status in the queue, R/ Q:C, %d/ %d:%d" % (jobR, jobQ, jobC)
       njob_pending = jobQ + jobC
       njob_total = njob_pending + jobR
@@ -490,7 +494,9 @@ class PbsSubmitter:
         if i_queue != num_queues-1:
           i_queue = (i_queue+1) % num_queues
         else:  # back-off for a while before retrying
-          print "Waiting on the pbs queue..."
+          icnt += 1
+          if icnt == 1:  # Do not print multiple times of the same waiting msg
+            print "Waiting on the pbs queue..."
           os.system("sleep 60")  # Sleep a while (secs) before do the query again.
           # Then start polling the first queue again.
           i_queue = 0
