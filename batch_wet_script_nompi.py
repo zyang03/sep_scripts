@@ -5,7 +5,6 @@ import sepbase
 
 def self_doc():
   print 
-  print 
 
 ## This program will try to batch generate velocity updates from wave-equation tomography operator.
 # Usage1:    *.py param=waz3d.param pbs_template=pbs_script_tmpl.sh nfiles=1001 nfiles_perbatch=10 path=path_out prefix=hess-waz3d queue=q35 nnodes=0 njobmax=5 ish_beg=0 vel=vel.H dimg=dimg.H prefix=pf dvel=output.H
@@ -35,7 +34,7 @@ def Run(argv):
   pbs_script_creator = pbs_util.PbsScriptCreator(param_reader)
   wei_scriptor = pbs_util.WeiScriptor(param_reader)
   assert param_reader.queues[0] != 'default'  # Put sep queue ahead of the default queue.
-  pbs_submitter = pbs_util.PbsSubmitter(zip(param_reader.queues, param_reader.queues_cap), param_reader.njobs_max, dict_args['user'])
+  pbs_submitter = pbs_util.PbsSubmitter(zip(param_reader.queues, param_reader.queues_cap), param_reader.total_jobs_cap, dict_args['user'])
   # See if specify image/Hessian/dvel dimensions in cmdline
   [xmin_cmdl,xmax_cmdl, ymin_cmdl,ymax_cmdl, zmin_cmdl,zmax_cmdl] = param_reader.g_output_image_domain
   # First check if the final dvel exists, if so we can return the result directly.
@@ -88,16 +87,14 @@ def Run(argv):
       # For fn_dvel, Axis 1,2,3 are (x,y,z)
       scripts.append(
           pbs_script_creator.CmdCombineMultipleOutputSephFiles(
-              fnt_output_list, fn_output,
-              "oe1=%g,%g oe2=%g,%g ndim=3" % (xmin_g,xmax_g,ymin_g,ymax_g)))
+              fnt_output_list, fn_output, "", None, wei_scriptor.fnt_bvel))
       scripts.append(pbs_script_creator.CmdFinalCleanUpTempDir())
-      pbs_script_creator.CreateScriptForNewJob('%s-%s'%(fn_base_wo_ext,sz_shotrange))
+      pbs_script_creator.CreateScriptForNewJob('%s-%s'%(sz_shotrange, fn_base_wo_ext))
       pbs_submitter.SubmitJob(pbs_script_creator.AppendScriptsContent(scripts))
     # end for ish,nsh
   # end while not AllFilesComputed
   # Now combine all dvel files together, use a new pbs_submitter, need to use the non-default queue.
   pbs_submitter = pbs_util.PbsSubmitter([(param_reader.queues[0], param_reader.queues_cap[0])], None, dict_args['user'])
-  print fn_output_list_all
   scripts = []; combine_pars = ""
   if xmin_cmdl is not None:
     combine_pars = "oe1=%g,%g oe2=%g,%g ndim=3" % (xmin_cmdl,xmax_cmdl,ymin_cmdl,ymax_cmdl)

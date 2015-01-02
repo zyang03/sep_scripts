@@ -34,7 +34,7 @@ def Run(argv):
   pbs_script_creator = pbs_util.PbsScriptCreator(param_reader)
   wei_scriptor = pbs_util.WeiScriptor(param_reader)
   assert param_reader.queues[0] != 'default'  # Put sep queue ahead of the default queue.
-  pbs_submitter = pbs_util.PbsSubmitter(zip(param_reader.queues, param_reader.queues_cap), param_reader.njobs_max, dict_args['user'])
+  pbs_submitter = pbs_util.PbsSubmitter(zip(param_reader.queues, param_reader.queues_cap), param_reader.total_jobs_cap, dict_args['user'])
   # See if specify image/Hessian dimensions in cmdline
   [xmin_cmdl,xmax_cmdl, ymin_cmdl,ymax_cmdl, zmin_cmdl,zmax_cmdl] = param_reader.g_output_image_domain
   # First check if the final imgh exists
@@ -88,12 +88,12 @@ def Run(argv):
               fnt_imgh_list, fn_imgh,
               "oe3=%g,%g oe4=%g,%g ndim=5" % (xmin_g,xmax_g,ymin_g,ymax_g), path_out))
       scripts.append(pbs_script_creator.CmdFinalCleanUpTempDir())
-      pbs_script_creator.CreateScriptForNewJob('%s-%s'%(fn_base_wo_ext,sz_shotrange))
+      pbs_script_creator.CreateScriptForNewJob('%s-%s'%(sz_shotrange,fn_base_wo_ext))
       pbs_submitter.SubmitJob(pbs_script_creator.AppendScriptsContent(scripts))
     # end for ish,nsh
   # end for while
   # Now combine all imgh files together, use a new pbs_submitter, need to use the non-default queue.
-  pbs_submitter = pbs_util.PbsSubmitter([(param_reader.queues[0], param_reader.queues_cap[0])], param_reader.njobs_max, dict_args['user'])
+  pbs_submitter = pbs_util.PbsSubmitter([(param_reader.queues[0], param_reader.queues_cap[0])], None, dict_args['user'])
   scripts = []
   combine_pars = ""
   if xmin_cmdl is not None:

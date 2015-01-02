@@ -36,7 +36,7 @@ def Run(argv):
   # Initialize script_creators and PbsSubmitter.
   pbs_script_creator = pbs_util.PbsScriptCreator(param_reader)
   assert param_reader.queues[0] != 'default'  # Put sep queue ahead of the default queue.
-  pbs_submitter = pbs_util.PbsSubmitter(zip(param_reader.queues, param_reader.queues_cap), param_reader.njobs_max, dict_args['user'])
+  pbs_submitter = pbs_util.PbsSubmitter(zip(param_reader.queues, param_reader.queues_cap), param_reader.total_jobs_cap, dict_args['user'])
   obj_func_value = None
   # Check input file validity.
   file_error = pbs_util.CheckSephFileError(fn_img,False)
@@ -81,9 +81,10 @@ def Run(argv):
     scripts.append(pbs_script_creator.CmdFinalCleanUpTempDir())
     pbs_submitter.SubmitJob(pbs_script_creator.AppendScriptsContent(scripts))
   # end for while
+  print 'ObjFuncValue=%g' % obj_func_value
   return obj_func_value
 
 
 if __name__ == '__main__':
-  print 'objfunc_value = %g' % Run(sys.argv)
+  Run(sys.argv)
 

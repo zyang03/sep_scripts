@@ -7,8 +7,9 @@ YANG_BIN=  /data/sep/zyang03/bin
 # Plane-wave, target region only.
 SOURCE_TYPE= plane
 
-MIG_PAR_WAZ3D=  pdip=65 oper=ssfpi nvrf=4 nws=100 nxpad_beg=20 nxpad_end=20 nypad_beg=20 nypad_end=20 ntpx=20 ntpy=20 memchk=n report=y comsou=y offset=n
-SS_OFFSET_PAR=  nhx=21 dhx=50 ohx=-500 nhy=19 dhy=60 ohy=-540
+MIG_PAR_WAZ3D=  pdip=65 oper=ssfpi nvrf=4 nws=50 nxpad_beg=20 nxpad_end=20 nypad_beg=20 nypad_end=20 ntpx=20 ntpy=20 memchk=n report=y comsou=y offset=n
+#SS_OFFSET_PAR=  nhx=21 dhx=50 ohx=-500 nhy=19 dhy=60 ohy=-540
+SS_OFFSET_PAR=  nhx=17 dhx=50 ohx=-400 nhy=15 dhy=60 ohy=-420
 # For test
 MIG_PAR_WAZ3D_=  pdip=65 oper=ssfpi nvrf=2 nws=100 nxpad_beg=20 nxpad_end=20 nypad_beg=20 nypad_end=20 ntpx=20 ntpy=20 memchk=n report=y comsou=y offset=n
 SS_OFFSET_PAR__=  nhx=5 dhx=50 ohx=-100 nhy=3 dhy=60 ohy=-60
@@ -21,8 +22,8 @@ GEOM_GXY= ngx=273 dgx=25 ogx=17500  ngy=175 dgy=30 ogy=-6210
 
 [Solver Vel Inversion]
 minval= 2800
-maxval= 4200
-smooth_rect_sizes=30,20,15
+maxval= 4000
+smooth_rect_sizes=30,25,15
 smooth_rect_reductions=2,2,1
 nrepeat=1
 # The first iter should not change more than +/- 100m/s on average.

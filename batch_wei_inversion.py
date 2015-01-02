@@ -67,7 +67,9 @@ if __name__ == '__main__':
   path_iter = os.path.abspath(dict_args['path_iter'])  # The path that save the intermediate results
   niter = int(dict_args['niter'])
   iter_beg = int(dict_args.get('iter_beg',0))
-
+  str_ws_wnd_wet = dict_args.get('ws_wnd_wet')  # Might use different frequency sampling for tomo operator.
+  str_ws_wnd = dict_args.get('ws_wnd')
+  
   # The inversion code, v is vel model, s is search direction.
   fn_v0 = dict_args['vel']; fn_v = fn_v0  # v is the current iteration vel model.
   fn_srch = ""; fn_srch_prev = ""
@@ -80,7 +82,7 @@ if __name__ == '__main__':
   for iter in range(niter-1, iter_beg_old-1, -1):  # From [niter-1 to iter_beg], see if we have fn_vn name in place.
     fn_prefix = "%s/iter%02d" % (path_iter,iter)
     fn_vn = "%s-velnew.H" % fn_prefix
-    if pbs_util.CheckSephFileError(fn_v1,False)==0:
+    if pbs_util.CheckSephFileError(fn_vn,False)==0:
       # Further extra stepsize info (alpha)
       str_alphas = sepbase.get_sep_his_par("stepsizes")
       if str_alphas:  # We can start from iter+1 instead of the very begining.
@@ -102,7 +104,16 @@ if __name__ == '__main__':
     # Compute gradient dvel from dimg using WET operator.
     fn_dv = "%s-dvel.H" % fn_prefix
     eq_args_cmdline["dvel"] = fn_dv
+    # Change the frequency sampling scheme
+    if str_ws_wnd_wet:
+      eq_args_cmdline['ws_wnd'] = str_ws_wnd_wet
     batch_wet.Run(GenCmdlineArgsFromDict(eq_args_cmdline))
+    # Restore frequency sampling scheme
+    if str_ws_wnd_wet:
+      if str_ws_wnd:
+        eq_args_cmdline['ws_wnd'] = str_ws_wnd
+      else:
+        del eq_args_cmdline['ws_wnd']
     # Compute search direction s_k from g_k [and s_{i-1}], and apply preconditioning (amplitude scaling and smoothing).
     fn_srch = "%s-srch.H" % fn_prefix
     fn_srch_prev = ""  # Currently just use steepest descent.
@@ -121,8 +132,8 @@ if __name__ == '__main__':
     # stepsizes are alpha1,alpha2
     fn_v1 = "%s-vel1.H" % fn_prefix; fn_v2 = "%s-vel2.H" % fn_prefix
     alpha1 = alpha; alpha2 = 2*alpha1
-    cmd = ('%s/GenTrialModelFromSrchDir.x <%s srch=%s stepsize=%f,%f vmax=%g vmin=%g output=%s,%s' % 
-           (dict_args['YANG_BIN'], fn_v,fn_srch,alpha1,alpha2,solver_par.maxval,solver_par.minval, fn_v1,fn_v2))
+    cmd = ('%s/GenTrialModelFromSrchDir.x <%s srch=%s stepsize=%f,%f vmax=%g vmin=%g output=%s,%s datapath=%s/ ' % 
+           (dict_args['YANG_BIN'], fn_v,fn_srch,alpha1,alpha2,solver_par.maxval,solver_par.minval, fn_v1,fn_v2, path_iter))
     sepbase.RunShellCmd(cmd,True)
     assert pbs_util.CheckSephFileError(fn_v1,False)==0
     assert pbs_util.CheckSephFileError(fn_v2,False)==0
@@ -142,8 +153,8 @@ if __name__ == '__main__':
     alphas.append(alpha);
     # Compute the updated vel model, the filename is written to fn_v
     fn_vn = "%s-velnew.H" % fn_prefix
-    cmd = ('%s/GenTrialModelFromSrchDir.x <%s srch=%s stepsize=%f vmax=%g vmin=%g output=%s' %
-           (dict_args['YANG_BIN'], fn_v,fn_srch,alpha, solver_par.maxval,solver_par.minval, fn_vn))
+    cmd = ('%s/GenTrialModelFromSrchDir.x <%s srch=%s stepsize=%f vmax=%g vmin=%g output=%s datapath=%s/' %
+           (dict_args['YANG_BIN'], fn_v,fn_srch,alpha, solver_par.maxval,solver_par.minval, fn_vn, path_iter))
     sepbase.RunShellCmd(cmd, True);
     assert pbs_util.CheckSephFileError(fn_vn,False)==0
     # Write the alpha and objfuncs history to fn_vn
