@@ -1,6 +1,8 @@
 #!/usr/bin/python
 import commands,os,sys
+import pickle
 import pbs_util
+from pbs_util import WeiInversionBookkeeper
 import sepbase
 import batch_mig_script_nompi as batch_mig
 import batch_wet_script_nompi as batch_wet
@@ -8,7 +10,9 @@ import calc_wemva_objfunc as wemva_obj
 
 ## This program glues all the batch processed wave-equation operators to make an inversion loop.
 
-# Usage: *.py param=waz3d.param pbs_template=pbs_script_tmpl.sh nfiles=1001 nfiles_perjob=10 path=path_out prefix=waz3d queues=q35,default nnodes=0 njobmax=5 ish_beg=0 vel=vel.H niter=10 iiter=0 path_iter=path_to_save_results_per_iteration
+# Usage: *.py param=waz3d.param pbs_template=pbs_script_tmpl.sh nfiles=1001 nfiles_perjob=10 path=path_out prefix=waz3d queues=q35,default nnodes=0 njobmax=5 ish_beg=0 vel=vel.H niter=10 iiter=0 path_iter=path_to_save_results_per_iteration load_save=load_fn,save_fn
+# load_save is the bookkeeping object after seralization, this is used for resuming computation.
+
 
 def FitParabola(x_coefs, func_vals):
   '''Given 3 points of (x,y), return the fitted parabola coefs [a,b,c] (ax^2+bx+c).'''
@@ -69,101 +73,166 @@ if __name__ == '__main__':
   iter_beg = int(dict_args.get('iter_beg',0))
   str_ws_wnd_wet = dict_args.get('ws_wnd_wet')  # Might use different frequency sampling for tomo operator.
   str_ws_wnd = dict_args.get('ws_wnd')
-  
   # The inversion code, v is vel model, s is search direction.
-  fn_v0 = dict_args['vel']; fn_v = fn_v0  # v is the current iteration vel model.
+  fn_v0 = dict_args['vel']; # v is the current iteration vel model.
   fn_srch = ""; fn_srch_prev = ""
-  objfuncs = []; objfunc = 0.0; alphas = []; alpha = 0.0
-  # Initiate alpha
-  alpha = solver_par.initial_perturb_scale
-  smooth_rects = solver_par.smooth_rect_sizes[:]
-  # See if we can pick up from somewhere we recorded previously.
-  iter_beg_old = iter_beg
-  for iter in range(niter-1, iter_beg_old-1, -1):  # From [niter-1 to iter_beg], see if we have fn_vn name in place.
-    fn_prefix = "%s/iter%02d" % (path_iter,iter)
-    fn_vn = "%s-velnew.H" % fn_prefix
-    if pbs_util.CheckSephFileError(fn_vn,False)==0:
-      # Further extra stepsize info (alpha)
-      str_alphas = sepbase.get_sep_his_par("stepsizes")
-      if str_alphas:  # We can start from iter+1 instead of the very begining.
-        alpha = str_alphas.split(',')[-1]
-        iter_beg = iter+1
-        fn_v = fn_vn  # Set the existing fn_vn as the starting velocity model.
+  # Initiate alpha and smoothing scale.
+  alpha_init = solver_par.initial_perturb_scale
+  smooth_rects_init = solver_par.smooth_rect_sizes[:]
+  # For bookkeeping, load/save from a previous executing point.
+  fn_load,fn_save= dict_args['load_save'].split(',')
+  resume_from_saving_pt = False
+  if os.path.exists(fn_load):  # See if we can resume from a saved point before
+    f = open(fn_load,'rb'); wei_inv_bookkeeper = pickle.load(f); f.close()
+    print "Loading the inversion bookkeeper...: %s" % wei_inv_bookkeeper
+    assert (isinstance(wei_inv_bookkeeper,WeiInversionBookkeeper))
+    # Restore the values of those variables 
+    # e.g: objfuncs, stepsizes(alphas), alpha, etc
+    iter_beg = wei_inv_bookkeeper.iter
+    resume_from_saving_pt = True
+  else:  # No file to load, then create wei_inv_bookkeeper on my own
+    wei_inv_bookkeeper = WeiInversionBookkeeper([],[])
+    wei_inv_bookkeeper.alpha = alpha_init  # This case, we will use alpha designated by the cmdline.
+    # See if we can pick up from somewhere we recorded previously, by
+    # checking if the inverted velocity file from last time is recorded.
+    iter_beg_old = iter_beg
+    for iter in range(niter-1, iter_beg_old-1, -1):  # From [niter-1 to iter_beg], see if we have fn_vn name in place.
+      fn_prefix = "%s/iter%02d" % (path_iter,iter)
+      fn_vn = "%s-velnew.H" % fn_prefix
+      if pbs_util.CheckSephFileError(fn_vn,False)==0:
+        iter_beg = iter+1  # Starting from this new iteration number.
+        wei_inv_bookkeeper.iter = iter_beg
+        wei_inv_bookkeeper.fn_v = fn_vn  # Set the existing fn_vn as the starting velocity model.
+        # Further extra extra info like stepsizes(alpha) from the history file.
+        str_alphas = sepbase.get_sep_his_par(fn_vn,"stepsizes")
+        if str_alphas:  # We can start from iter+1 instead of the very begining.
+          wei_inv_bookkeeper.stepsizes = map(float,str_alphas.split(','))
+        str_objfuncs = sepbase.get_sep_his_par(fn_vn,"objfuncs")
+        if str_objfuncs:
+          wei_inv_bookkeeper.objfuncs = map(float,str_alphas.split(','))
         break
+  wib = wei_inv_bookkeeper  # An acronym, less typing.
+  if wib.fn_v is None: wib.fn_v = fn_v0
+  if wib.alpha is None: wib.alpha = alpha_init
+  if not wib.smooth_rects: wib.smooth_rects = smooth_rects_init
+  print "Current inversion bookkeeper status: %s" % wib
   # The main inversion loop.
-  for iter in range(iter_beg, niter):
+  for wib.iter in range(iter_beg, niter):
+    in_loading_stage = (wib.iter==iter_beg and resume_from_saving_pt)
     # Calc I(v_k) and J_k, and gradient g_k (i.e. fn_dv)
-    fn_prefix = "%s/iter%02d" % (path_iter,iter)
+    fn_prefix = "%s/iter%02d" % (path_iter,wib.iter)
     fn_img = "%s-img.H" % fn_prefix
-    eq_args_cmdline['vel'] = fn_v
+    eq_args_cmdline['vel'] = wib.fn_v
     eq_args_cmdline['img'] = fn_img
-    batch_mig.Run(GenCmdlineArgsFromDict(eq_args_cmdline))
+    if in_loading_stage and wib.resume_stage >= WeiInversionBookkeeper.IMG_CALC:
+      assert wib.fn_prefix == fn_prefix
+      assert pbs_util.CheckSephFileError(fn_img) == 0
+    else:  # Record status and make a save
+      wib.smooth_rects_history.append(wib.smooth_rects[:])
+      wib.fn_prefix = fn_prefix
+      batch_mig.Run(GenCmdlineArgsFromDict(eq_args_cmdline))
+      wib.Save(WeiInversionBookkeeper.IMG_CALC,fn_save)
     fn_dimg = "%s-dimg.H" % fn_prefix
     eq_args_cmdline["dimg"] = fn_dimg
-    objfunc = wemva_obj.Run(GenCmdlineArgsFromDict(eq_args_cmdline))
+    if in_loading_stage and wib.resume_stage >= WeiInversionBookkeeper.DIMG_CALC:
+      assert pbs_util.CheckSephFileError(fn_dimg) == 0
+      assert wib.objfunc != None
+    else:
+      wib.objfunc = wemva_obj.Run(GenCmdlineArgsFromDict(eq_args_cmdline))
+      wib.Save(WeiInversionBookkeeper.DIMG_CALC,fn_save)
     # Compute gradient dvel from dimg using WET operator.
     fn_dv = "%s-dvel.H" % fn_prefix
     eq_args_cmdline["dvel"] = fn_dv
-    # Change the frequency sampling scheme
-    if str_ws_wnd_wet:
-      eq_args_cmdline['ws_wnd'] = str_ws_wnd_wet
-    batch_wet.Run(GenCmdlineArgsFromDict(eq_args_cmdline))
-    # Restore frequency sampling scheme
-    if str_ws_wnd_wet:
-      if str_ws_wnd:
-        eq_args_cmdline['ws_wnd'] = str_ws_wnd
-      else:
-        del eq_args_cmdline['ws_wnd']
-    # Compute search direction s_k from g_k [and s_{i-1}], and apply preconditioning (amplitude scaling and smoothing).
+    if in_loading_stage and wib.resume_stage >= WeiInversionBookkeeper.GRAD_CALC:
+      assert pbs_util.CheckSephFileError(fn_dv) == 0
+    else:
+      # Change the frequency sampling scheme
+      if str_ws_wnd_wet:
+        eq_args_cmdline['ws_wnd'] = str_ws_wnd_wet
+      batch_wet.Run(GenCmdlineArgsFromDict(eq_args_cmdline))
+      # Restore frequency sampling scheme
+      if str_ws_wnd_wet:
+        if str_ws_wnd:
+          eq_args_cmdline['ws_wnd'] = str_ws_wnd
+        else:
+          del eq_args_cmdline['ws_wnd']
+      # Compute search direction s_k from g_k [and s_{i-1}], and apply preconditioning (amplitude scaling and smoothing).
+      wib.Save(WeiInversionBookkeeper.GRAD_CALC,fn_save)
     fn_srch = "%s-srch.H" % fn_prefix
     fn_srch_prev = ""  # Currently just use steepest descent.
-    if pbs_util.CheckSephFileError(fn_srch,True) != 0:
-      cmd = ('%s/GenSrchDirFromGradient.x <%s srch_prev=%s >%s rect1=%d rect2=%d rect3=%d' %
-             (dict_args['YANG_BIN'], fn_dv, fn_srch_prev, fn_srch, 
-              smooth_rects[0],smooth_rects[1],smooth_rects[2]))
-      sepbase.RunShellCmd(cmd,True)
-      # Make sure the expected output file is generated.
-      assert pbs_util.CheckSephFileError(fn_srch,True)==0
+    cmd = ('%s/GenSrchDirFromGradient.x <%s srch_prev=%s >%s rect1=%d rect2=%d rect3=%d datapath=%s/' %
+           (dict_args['YANG_BIN'], fn_dv, fn_srch_prev, fn_srch, 
+            wib.smooth_rects[0],wib.smooth_rects[1],wib.smooth_rects[2], path_iter))
+    sepbase.RunShellCmd(cmd,True)
+    # Make sure the expected output file is generated.
+    assert pbs_util.CheckSephFileError(fn_srch,True)==0
     # Adjust the smooth scale after each iteration
-    for i in range(len(smooth_rects)):
-      smooth_rects[i] -= solver_par.smooth_rect_sizes[i]
-      if smooth_rects[i]<1: smooth_rects[i]=1
+    for i in range(len(wib.smooth_rects)):
+      wib.smooth_rects[i] -= solver_par.smooth_rect_reductions[i]
+      if wib.smooth_rects[i]<1: wib.smooth_rects[i]=1
     # Compute step size by trying out two trial model points along the s_k dir,
     # stepsizes are alpha1,alpha2
     fn_v1 = "%s-vel1.H" % fn_prefix; fn_v2 = "%s-vel2.H" % fn_prefix
-    alpha1 = alpha; alpha2 = 2*alpha1
-    cmd = ('%s/GenTrialModelFromSrchDir.x <%s srch=%s stepsize=%f,%f vmax=%g vmin=%g output=%s,%s datapath=%s/ ' % 
-           (dict_args['YANG_BIN'], fn_v,fn_srch,alpha1,alpha2,solver_par.maxval,solver_par.minval, fn_v1,fn_v2, path_iter))
-    sepbase.RunShellCmd(cmd,True)
-    assert pbs_util.CheckSephFileError(fn_v1,False)==0
-    assert pbs_util.CheckSephFileError(fn_v2,False)==0
+    alpha1 = wib.alpha; alpha2 = 2*alpha1
+    if in_loading_stage and wib.resume_stage >= WeiInversionBookkeeper.VEL12_CALC:
+      assert pbs_util.CheckSephFileError(fn_v1,False)==0
+      assert pbs_util.CheckSephFileError(fn_v2,False)==0
+    else:
+      cmd = ('%s/GenTrialModelFromSrchDir.x <%s srch=%s stepsize=%f,%f vmax=%g vmin=%g output=%s,%s datapath=%s/ ' % 
+           (dict_args['YANG_BIN'], wib.fn_v,fn_srch,alpha1,alpha2,solver_par.maxval,solver_par.minval, fn_v1,fn_v2, path_iter))
+      sepbase.RunShellCmd(cmd,True)
+      assert pbs_util.CheckSephFileError(fn_v1,False)==0
+      assert pbs_util.CheckSephFileError(fn_v2,False)==0
+      wib.Save(WeiInversionBookkeeper.VEL12_CALC,fn_save)
+
     # After fn_v1 and fn_v2 are in place, perform migration.
     fn_img1 = "%s-img1.H" % fn_prefix; fn_img2 = "%s-img2.H" % fn_prefix
     del eq_args_cmdline["dimg"]
-    eq_args_cmdline["vel"] = fn_v1; eq_args_cmdline["img"] = fn_img1
-    batch_mig.Run(GenCmdlineArgsFromDict(eq_args_cmdline))
-    objfunc1 = wemva_obj.Run(GenCmdlineArgsFromDict(eq_args_cmdline))
-    eq_args_cmdline["vel"] = fn_v2; eq_args_cmdline["img"] = fn_img2
-    batch_mig.Run(GenCmdlineArgsFromDict(eq_args_cmdline))
-    objfunc2 = wemva_obj.Run(GenCmdlineArgsFromDict(eq_args_cmdline))
-    # Compute step-length alpha based on objfunc[,1,2]
-    alpha = ComputeOptimalStepSize(alpha1,alpha2,objfunc,objfunc1,objfunc2)
-    objfuncs.extend([objfunc, objfunc1, objfunc2])
-    print "objfuncs for current iter: ", [objfunc, objfunc1, objfunc2], [alpha1,alpha2,alpha]
-    alphas.append(alpha);
-    # Compute the updated vel model, the filename is written to fn_v
+    if in_loading_stage and wib.resume_stage >= WeiInversionBookkeeper.IMG1_CALC:
+      assert pbs_util.CheckSephFileError(fn_img1,False)==0
+    else:
+      eq_args_cmdline["vel"] = fn_v1; eq_args_cmdline["img"] = fn_img1
+      batch_mig.Run(GenCmdlineArgsFromDict(eq_args_cmdline))
+      wib.Save(WeiInversionBookkeeper.IMG1_CALC,fn_save)
+    if in_loading_stage and wib.resume_stage >= WeiInversionBookkeeper.OBJ1_CALC:
+      assert wib.objfunc1 != None
+    else:
+      wib.objfunc1 = wemva_obj.Run(GenCmdlineArgsFromDict(eq_args_cmdline))
+      wib.Save(WeiInversionBookkeeper.OBJ1_CALC,fn_save)
+    if in_loading_stage and wib.resume_stage >= WeiInversionBookkeeper.IMG2_CALC:
+      assert pbs_util.CheckSephFileError(fn_img2,False)==0
+    else:
+      eq_args_cmdline["vel"] = fn_v2; eq_args_cmdline["img"] = fn_img2
+      batch_mig.Run(GenCmdlineArgsFromDict(eq_args_cmdline))
+      wib.Save(WeiInversionBookkeeper.IMG2_CALC,fn_save)
+    if in_loading_stage and wib.resume_stage >= WeiInversionBookkeeper.OBJ2_CALC:
+      assert wib.objfunc2 != None
+    else:
+      wib.objfunc2 = wemva_obj.Run(GenCmdlineArgsFromDict(eq_args_cmdline))
+      wib.Save(WeiInversionBookkeeper.OBJ2_CALC,fn_save)
+
     fn_vn = "%s-velnew.H" % fn_prefix
-    cmd = ('%s/GenTrialModelFromSrchDir.x <%s srch=%s stepsize=%f vmax=%g vmin=%g output=%s datapath=%s/' %
-           (dict_args['YANG_BIN'], fn_v,fn_srch,alpha, solver_par.maxval,solver_par.minval, fn_vn, path_iter))
-    sepbase.RunShellCmd(cmd, True);
-    assert pbs_util.CheckSephFileError(fn_vn,False)==0
-    # Write the alpha and objfuncs history to fn_vn
-    fp = open(fn_vn,'a');
-    fp.write("stepsizes=%s\n" % ','.join(["%g"%x for x in alphas]))
-    fp.write("objfuncs=%s\n" % ','.join(["%g"%x for x in objfuncs]))
-    fp.close()
+    if in_loading_stage and wib.resume_stage >= WeiInversionBookkeeper.VELNEW_CALC:
+      assert pbs_util.CheckSephFileError(fn_vn,True)==0
+    else:
+      # Compute step-length alpha based on objfunc[,1,2]
+      wib.alpha = ComputeOptimalStepSize(alpha1,alpha2,wib.objfunc,wib.objfunc1,wib.objfunc2)
+      wib.objfuncs.extend([wib.objfunc, wib.objfunc1, wib.objfunc2])
+      print "objfuncs for current iter: ", [objfunc, objfunc1, objfunc2], [alpha1,alpha2,alpha]
+      wib.stepsizes.append(alpha);
+      # Compute the updated vel model, the filename is written to fn_v
+      cmd = ('%s/GenTrialModelFromSrchDir.x <%s srch=%s stepsize=%f vmax=%g vmin=%g output=%s datapath=%s/' %
+             (dict_args['YANG_BIN'], wib.fn_v,fn_srch,wib.alpha, solver_par.maxval,solver_par.minval, fn_vn, path_iter))
+      sepbase.RunShellCmd(cmd, True);
+      assert pbs_util.CheckSephFileError(fn_vn,True)==0
+      # Write the alpha and objfuncs history to fn_vn
+      fp = open(fn_vn,'a');
+      fp.write("\nstepsizes=%s\n" % ','.join(["%g"%x for x in wib.stepsizes]))
+      fp.write("objfuncs=%s\n" % ','.join(["%g"%x for x in wib.objfuncs]))
+      fp.close()
+      wib.Save(WeiInversionBookkeeper.VELNEW_CALC,fn_save)
     # Update v_{k+1} := v_k.
-    fn_v = fn_vn
+    wib.fn_v = fn_vn
     fn_srch_prev = fn_srch
   # end iteration
   print "!Finished. The final inverted model is saved at: %s" % os.path.abspath(fn_v)

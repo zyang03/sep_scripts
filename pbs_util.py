@@ -1,4 +1,5 @@
 import commands,os
+import pickle
 import sepbase
 import time
 from os.path import abspath
@@ -546,4 +547,69 @@ class SolverParamReader:
     self.nrepeat = int(dict_args.get('nrepeat',1))
     # 'initial_perturb_scale' determines the starting stepsize the inversion will choose to generate trial models, i.e. the starting delta_m = initial_perturb_scale*normalized_grad. Assuming normalized_grad has a RMS of 1.0
     self.initial_perturb_scale = float(dict_args['initial_perturb_scale'])
+
+
+class WeiInversionBookkeeper():
+  # For resume_stage, different stages during the resume of program,
+  # means synching right after IMG/DIMG/.../ operation.
+  IMG_CALC = 0
+  DIMG_CALC = 1
+  GRAD_CALC = 2
+  SRCH_CALC = 3
+  VEL12_CALC = 4
+  IMG1_CALC = 5
+  OBJ1_CALC = 6
+  IMG2_CALC = 7
+  OBJ2_CALC = 8
+  VELNEW_CALC = 9
+
+  def __init__(self, stepsizes, objfuncs):
+    '''This class is used for Bookkeeping the inversion history/status, so that it can be resumed later on.
+    Args:
+      Stepsizes: A list of stepsizes recorded for the inversion hisotry.
+      objfuncs: A list recording the history of objfuncs.
+      save_filename: The name of file that this class will be saved into.
+    Members:
+      smooth_rects_list is a list of [rect1,rect2,rect3] list that records the smoothing parameter history.
+    '''
+    self.stepsizes = stepsizes
+    self.alpha = None
+    self.objfuncs = objfuncs
+    self.objfunc = None
+    self.objfunc1 = None
+    self.objfunc2 = None
+    self.smooth_rects_history = []
+    self.smooth_rects = []
+    self.iter = 0
+    self.fn_v = None  # Current velocity model
+    self.fn_prefix = None
+    self.resume_stage = None
+
+  def __str__(self):
+    '''Customize a print() method.'''
+    return """stepsizes=%s\nalpha=%s\nobjfuncs=%s\nobjfunc_012=%s\nsmooth_rects_history=%s\nsmooth_rects=%s
+iter=%d\nfn_v=%s\nfn_prefix=%s\nresume_stage=%s
+    """ % (self.stepsizes,self.alpha,self.objfuncs,[self.objfunc,self.objfunc1,self.objfunc2],
+           self.smooth_rects_history,self.smooth_rects,self.iter,self.fn_v,self.fn_prefix,self.resume_stage)
+
+  def __eq__(self, other):
+    if other.__class__.__name__ != self.__class__.__name__:
+      return False
+    if (self.stepsizes==other.stepsizes and
+        self.objfuncs==other.objfuncs and
+        self.save_filename==other.save_filename and
+        self.smooth_rects_list==other.smooth_rects_list and
+        self.iter==other.iter and
+        self.fn_prefix==other.fn_prefix and
+        self.resume_stage==other.resume_stage):
+      return True
+    else:
+      return False
+
+  def Save(self, resume_stage, save_filename):
+    '''Save the current status into the save_filename.'''
+    self.resume_stage = resume_stage
+    fp = open(save_filename,'wb')
+    pickle.dump(self,fp)
+    fp.close()
 
