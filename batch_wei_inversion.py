@@ -33,7 +33,7 @@ def ComputeOptimalStepSize(alpha1,alpha2,costfunc0,costfunc1,costfunc2):
   stepsizes = [0.,alpha1,alpha2]; costfuncs = [costfunc0,costfunc1,costfunc2]
   a,b,c = FitParabola(stepsizes, costfuncs)
   opt_stepsize = 0.
-  print stepsizes, costfuncs
+  # print stepsizes, costfuncs
   if a <= 0:  # Pathlogical case, the parabola is curving downward, pick the optimal solution among the 3 given sizes.
     print "The parabola is curving downward!"
     min_index = costfuncs.index(min(costfuncs))
@@ -109,7 +109,7 @@ if __name__ == '__main__':
           wei_inv_bookkeeper.stepsizes = map(float,str_alphas.split(','))
         str_objfuncs = sepbase.get_sep_his_par(fn_vn,"objfuncs")
         if str_objfuncs:
-          wei_inv_bookkeeper.objfuncs = map(float,str_alphas.split(','))
+          wei_inv_bookkeeper.objfuncs = map(float,str_objfuncs.split(','))
         break
   wib = wei_inv_bookkeeper  # An acronym, less typing.
   if wib.fn_v is None: wib.fn_v = fn_v0
@@ -160,16 +160,20 @@ if __name__ == '__main__':
       wib.Save(WeiInversionBookkeeper.GRAD_CALC,fn_save)
     fn_srch = "%s-srch.H" % fn_prefix
     fn_srch_prev = ""  # Currently just use steepest descent.
-    cmd = ('%s/GenSrchDirFromGradient.x <%s srch_prev=%s >%s rect1=%d rect2=%d rect3=%d datapath=%s/' %
-           (dict_args['YANG_BIN'], fn_dv, fn_srch_prev, fn_srch, 
-            wib.smooth_rects[0],wib.smooth_rects[1],wib.smooth_rects[2], path_iter))
-    sepbase.RunShellCmd(cmd,True)
-    # Make sure the expected output file is generated.
-    assert pbs_util.CheckSephFileError(fn_srch,True)==0
-    # Adjust the smooth scale after each iteration
-    for i in range(len(wib.smooth_rects)):
-      wib.smooth_rects[i] -= solver_par.smooth_rect_reductions[i]
-      if wib.smooth_rects[i]<1: wib.smooth_rects[i]=1
+    if in_loading_stage and wib.resume_stage >= WeiInversionBookkeeper.SRCH_CALC:
+      assert pbs_util.CheckSephFileError(fn_srch,False)==0
+    else:
+      cmd = ('%s/GenSrchDirFromGradient.x <%s srch_prev=%s >%s rect1=%d rect2=%d rect3=%d datapath=%s/' %
+             (dict_args['YANG_BIN'], fn_dv, fn_srch_prev, fn_srch, 
+              wib.smooth_rects[0],wib.smooth_rects[1],wib.smooth_rects[2], path_iter))
+      sepbase.RunShellCmd(cmd,True)
+      # Make sure the expected output file is generated.
+      assert pbs_util.CheckSephFileError(fn_srch,True)==0
+      # Adjust the smooth scale after each iteration
+      for i in range(len(wib.smooth_rects)):
+        wib.smooth_rects[i] -= solver_par.smooth_rect_reductions[i]
+        if wib.smooth_rects[i]<1: wib.smooth_rects[i]=1
+      wib.Save(WeiInversionBookkeeper.SRCH_CALC,fn_save)
     # Compute step size by trying out two trial model points along the s_k dir,
     # stepsizes are alpha1,alpha2
     fn_v1 = "%s-vel1.H" % fn_prefix; fn_v2 = "%s-vel2.H" % fn_prefix
@@ -217,9 +221,10 @@ if __name__ == '__main__':
     else:
       # Compute step-length alpha based on objfunc[,1,2]
       wib.alpha = ComputeOptimalStepSize(alpha1,alpha2,wib.objfunc,wib.objfunc1,wib.objfunc2)
-      wib.objfuncs.extend([wib.objfunc, wib.objfunc1, wib.objfunc2])
-      print "objfuncs for current iter: ", [objfunc, objfunc1, objfunc2], [alpha1,alpha2,alpha]
-      wib.stepsizes.append(alpha);
+      objfuncs3 = [wib.objfunc, wib.objfunc1, wib.objfunc2]
+      wib.objfuncs.extend(objfuncs3)
+      print "objfuncs for current iter: ", objfuncs3, [alpha1,alpha2,wib.alpha]
+      wib.stepsizes.append(wib.alpha);
       # Compute the updated vel model, the filename is written to fn_v
       cmd = ('%s/GenTrialModelFromSrchDir.x <%s srch=%s stepsize=%f vmax=%g vmin=%g output=%s datapath=%s/' %
              (dict_args['YANG_BIN'], wib.fn_v,fn_srch,wib.alpha, solver_par.maxval,solver_par.minval, fn_vn, path_iter))
@@ -235,8 +240,8 @@ if __name__ == '__main__':
     wib.fn_v = fn_vn
     fn_srch_prev = fn_srch
   # end iteration
-  print "!Finished. The final inverted model is saved at: %s" % os.path.abspath(fn_v)
-  print 'objfuncs=','\t'.join(["%g" % val for val in objfuncs])
-  print 'stepsizes=','\t'.join(["%g" % val for val in alphas])
+  print "!Finished. The final inverted model is saved at: %s" % os.path.abspath(wib.fn_v)
+  print 'objfuncs=','\t'.join(["%g" % val for val in wib.objfuncs])
+  print 'stepsizes=','\t'.join(["%g" % val for val in wib.stepsizes])
 
 
