@@ -140,7 +140,7 @@ class JobParamReader:
       self.queues_cap = map(int, self.queues_cap.split(','))
       assert len(queues_cap) == nqueue, 'queues and queues_cap have different num_of_elements!'
     else:  # Provide default values.
-      self.queues_cap = [1]*nqueue
+      self.queues_cap = [5]*nqueue
     self.prefix = dict_args['prefix']  # The prefix used for generating filenames for intermediate/output datafiles.
     # The cap of total number of jobs in *each* queue at any given time.
     self.total_jobs_cap = dict_args.get('total_jobs_cap')
@@ -339,10 +339,10 @@ class WeiScriptor:
     wem_bin_path = self.dict_args['TANG_BIN']
     if src_type == 'plane':
       cmd1 = "time %s/bwi-wem3d-Zh.x %s %s mode=imgfwd crec=%s csou=%s bimg=%s bvel=%s datapath=%s/" % (
-          wem_bin_path, self.dict_args['MIG_PAR_WAZ3D'], self.dict_args['GEOM_GXY'], self.fnt_crec, self.fnt_csou, self.fnt_bimgh,self.fnt_bvel, path_tmp)
+          wem_bin_path, self.dict_args['MIG_PAR_WAZ3D'], self.dict_args['GEOM_GXY'], self.fnt_crec, self.fnt_csou, self.fnt_bimg,self.fnt_bvel, path_tmp)
     else:
       cmd1 = "time %s/bwi-wem3d-Zh.x %s %s mode=imgfwd crec=%s csou=%s bimg=%s bvel=%s datapath=%s/" % (
-          wem_bin_path, self.dict_args['MIG_PAR_WAZ3D'], self.dict_args['GEOM_GXY'], self.fnt_crec, self.fnt_csou, self.fnt_bimgh,self.fnt_bvel, path_tmp)
+          wem_bin_path, self.dict_args['MIG_PAR_WAZ3D'], self.dict_args['GEOM_GXY'], self.fnt_crec, self.fnt_csou, self.fnt_bimg,self.fnt_bvel, path_tmp)
     return cmd + cmd1+CheckPrevCmdResultCShellScript(cmd1)
 
   def CmdCpbvelForEachJob(self):
@@ -455,7 +455,7 @@ class PbsSubmitter:
       if int(out1) > 0:
         icnt += 1
         if icnt == 1: print "Wait On All Jobs to Finish..."
-        time.sleep(10)
+        time.sleep(5)
       else:
         break
     return
@@ -490,7 +490,7 @@ class PbsSubmitter:
         stat1, out1 = commands.getstatusoutput(cmd1)
         if stat1 != 0:
           sepbase.err("submit job failed, msg=%d,%s" % (stat1,out1))
-        os.system("sleep 15")  # Stagger the job start-off time a bit.
+        os.system("sleep 5")  # Stagger the job start-off time a bit.
         break
       else:
         # if not last queue, then try next queue

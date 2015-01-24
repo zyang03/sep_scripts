@@ -46,7 +46,7 @@ if __name__ == '__main__':
     assert os.path.exists(file_name_full), "%s does not exist!!! Check file fname_out2!" % file_name_full
     #read in that files dimension
     his_eachshot={}
-    sepbase.get_sep_params(file_name_full,his_eachshot,"g")
+    sepbase.get_sep_axes_params(file_name_full,his_eachshot,"g")
     #need to extract the dimension information from each shot
     ogx = float(his_eachshot["og_1"]); ngx=int(his_eachshot["ng_1"]); dgx=float(his_eachshot["dg_1"])
     ogy = float(his_eachshot["og_2"]); ngy=int(his_eachshot["ng_2"]); dgy=float(his_eachshot["dg_2"])

@@ -35,10 +35,9 @@ def Run(argv):
   path_tmp = param_reader.path_tmp
   # Get the input image file.
   fn_img = os.path.abspath(dict_args['img'])
-  fn_img_path, fn_img_basename = os.path.split(fn_img)
-  # string fn_img_base_wo_ext serves as a single unique identifier.
+  _, fn_img_basename = os.path.split(fn_img)
   fn_img_base_wo_ext = os.path.splitext(fn_img_basename)[0]
-  # check if need to compute image perturbation.
+  # string fn_img_base_wo_ext serves as a single unique identifier.
   calc_dimg = False
   fn_dimg = dict_args.get('dimg')
   if fn_dimg is not None:
@@ -54,52 +53,6 @@ def Run(argv):
   # Check input file validity.
   file_error = pbs_util.CheckSephFileError(fn_img,False)
   assert file_error == 0, "The input file: %s is incorrect: %d" % (fn_img, file_error)
-  # Check if need to compute angle gather
-  b = dict_args.get('calc_ang_gather')
-  calc_ang_gather = b=='y' or b=='1'
-  if calc_ang_gather:  # Need to compute angle gather first.
-    fn_img_ang = "%s/%s-ang.H" % (fn_img_path, fn_img_base_wo_ext)
-    fnt_imgh_subsample = "%s/%s-ss2.H" % (path_out, fn_img_base_wo_ext)
-    fn_imgh0_zxy = "%s/%s-ss-h0zxy.H" % (path_out, fn_img_base_wo_ext)
-    while True:
-      job_identifier = 'ang-'+fn_img_base_wo_ext
-      pbs_submitter.WaitOnAllJobsFinish(job_identifier)
-      file_error = pbs_util.CheckSephFileError(fn_img,False)
-      if file_error == 0:
-        print "The image gather file is good, skip: %s " % fn_img_ang
-        break
-      else:  # Compute the angle gather
-        pbs_script_creator.CreateScriptForNewJob(job_identifier)
-        scripts = []
-        # Subsample the x,y`,z first
-  	    cmd = "time Window3d <%s j1=2 j2=2 j3=2 >%s datapath=%s/" % (fn_img, fnt_img_subsample, path_out)
-        scripts.append(cmd+CheckPrevCmdResultCShellScript(cmd))
-        cmd = "time Window3d <%s n1=1 n2=1 min1=0 min2=0 datapath=%s/ | Transp reshape=23 plane=12 >%s datapath=%s " % (fnt_img_subsample,path_tmp, fn_imgh0_zxy,path_tmp)
-        scripts.append(cmd+CheckPrevCmdResultCShellScript(cmd))
-        cmd1 = "time %s/YTransp12.x <%s reshape=2,5 >%s/t1.H datapath=%s/" % (dict_args['YANG_BIN'], fnt_img_subsample, path_tmp, path_tmp)
-        cmd2 = "time %s/YFt3d.x <%s/t1.H nth=8 n1=%s n2=%s n3=%s sign1=1 sign2=1 sign3=1 >%s/t2.H IOtype=r2c datapath=%s/" % (dict_args['YANG_BIN'], path_tmp, dict_args['nkx'],dict_args['nky'],dict_args['nkz'], path_tmp, path_tmp)
-  	    cmd3 = "time %s/YTransp12.x <%s/t2.H reshape=3,5 >%s/t3.H datapath=%s/" % (dict_args['YANG_BIN'], path_tmp,path_tmp,path_tmp)
-        scripts.append(cmd1+CheckPrevCmdResultCShellScript(cmd1))
-        scripts.append(cmd2+CheckPrevCmdResultCShellScript(cmd2))
-        scripts.append(cmd3+CheckPrevCmdResultCShellScript(cmd3))
-        fn_tmp_ang_kxyz = "%s/t-ang-kxyz.H" % path_tmp
-  	    cmd = "time %s/Off2ang3dB_kxyz.x par=%s bforward=1 <%s/t3.H >%s datapath=%s/" % (dict_args['YANG_BIN'], dict_args['fn_off2ang_par'], path_tmp, fn_tmp_ang_kxyz, path_tmp)
-        cmd1 = "time %s/YTransp12.x <%s reshape=2,5 >%s/t1.H datapath=%s/" % (dict_args['YANG_BIN'], fn_tmp_ang_kxyz, path_tmp, path_tmp)
-        cmd2 = "time %s/YFt3d.x <%s/t1.H nth=8 sign1=-1 sign2=-1 sign3=-1 >%s/t2.H IOtype=c2r datapath=%s/" % (dict_args['YANG_BIN'], path_tmp, path_tmp, path_tmp)
-        n1_ss = int(sepbase.get_sep_axis_params(fnt_img_subsample,1)[0])
-        n2_ss = int(sepbase.get_sep_axis_params(fnt_img_subsample,2)[0])
-        n3_ss = int(sepbase.get_sep_axis_params(fnt_img_subsample,3)[0])
-        cmd3 = "time Window3d <%s/t2.H n1=%d n2=%d n3=%d >%s/t3.H IOtype=c2r datapath=%s/" % (dict_args['YANG_BIN'], path_tmp, n1_ss,n2_ss,n3_ss, path_tmp, path_tmp)
-        # This time reshape=2,5, since (x,y,z,gamma,azim)=>(z,gamma,azim,x,y)
-  	    cmd4 = "time %s/YTransp12.x <%s/t3.H reshape=2,5 >%s datapath=%s/" % (dict_args['YANG_BIN'], path_tmp, fn_img_ang, path_out)
-        scripts.append(cmd+CheckPrevCmdResultCShellScript(cmd))
-        scripts.append(cmd1+CheckPrevCmdResultCShellScript(cmd1))
-        scripts.append(cmd2+CheckPrevCmdResultCShellScript(cmd2))
-        scripts.append(cmd3+CheckPrevCmdResultCShellScript(cmd3))
-        scripts.append(cmd4+CheckPrevCmdResultCShellScript(cmd4))
-        scripts.append(pbs_script_creator.CmdFinalCleanUpTempDir())
-        pbs_submitter.SubmitJob(pbs_script_creator.AppendScriptsContent(scripts))
-        # Now the angle gather image is ready.
   while True:
     job_identifier = 'objf-'+fn_img_base_wo_ext
     pbs_submitter.WaitOnAllJobsFinish(job_identifier)
@@ -124,7 +77,7 @@ def Run(argv):
             print "fn_imgh file is good, skip: %s" % fn_dimg
             break
           elif file_error == 1:
-            sepbase.err("!fn_imgh file is invalid (NaN): %s" % fn_dimg)
+            sepbase.err("! fn_imgh file is invalid (NaN): %s" % fn_dimg)
             break
           else:  # Needs to recompute the results.
             pass
@@ -133,8 +86,6 @@ def Run(argv):
     # Append commands to the end of the created script file
     scripts = []
     cmd = 'time %s/CalcWemvaObjFunc.x img=%s b3D=%s wemva_type=%s datapath=%s/' % (dict_args['YANG_BIN'], fn_img, b3D, wemva_type, path_tmp)
-    if calc_ang_gather:
-      cmd += ' ang_img=%s imgh0_zxy=%s ' % (fn_img_ang, fn_imgh0_zxy)
     if calc_dimg: cmd += ' dimg=dimg.H '
     scripts.append(cmd+pbs_util.CheckPrevCmdResultCShellScript(cmd)+'\n')
     if calc_dimg:  # Needs to copy the output image out.
@@ -143,10 +94,8 @@ def Run(argv):
     pbs_submitter.SubmitJob(pbs_script_creator.AppendScriptsContent(scripts))
   # end for while
   print 'ObjFuncValue=%g' % obj_func_value
-  # See if needs to convert dimg-ang back to dimg-off.
-  if calc_ang_gather and calc_dimg:
-    sepbase.err('not finished, off2ang conversion here!')
   return obj_func_value
+
 
 if __name__ == '__main__':
   Run(sys.argv)

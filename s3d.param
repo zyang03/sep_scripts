@@ -6,23 +6,20 @@ YANG_BIN=  /data/sep/zyang03/bin
 
 # Plane-wave, target region only.
 SOURCE_TYPE= plane
-
-MIG_PAR_WAZ3D=  pdip=65 oper=ssfpi nvrf=4 nws=50 nxpad_beg=20 nxpad_end=20 nypad_beg=20 nypad_end=20 ntpx=20 ntpy=20 memchk=n report=y comsou=y offset=n
-SS_OFFSET_PAR=  nhx=21 dhx=50 ohx=-500 nhy=19 dhy=60 ohy=-540
+MIG_PAR_WAZ3D=  pdip=65 oper=ssfpi nvrf=3 nws=40 nxpad_beg=0 nxpad_end=0 nypad_beg=0 nypad_end=0 ntpx=10 ntpy=10 memchk=n report=y comsou=y offset=n
+SS_OFFSET_PAR =  nhx=9 dhx=0.04 ohx=-0.16 nhy=9 dhy=0.04 ohy=-0.16
 #SS_OFFSET_PAR=  nhx=17 dhx=50 ohx=-400 nhy=15 dhy=60 ohy=-420
 # For test
 MIG_PAR_WAZ3D_=  pdip=65 oper=ssfpi nvrf=2 nws=100 nxpad_beg=20 nxpad_end=20 nypad_beg=20 nypad_end=20 ntpx=20 ntpy=20 memchk=n report=y comsou=y offset=n
-SS_OFFSET_PAR__=  nhx=5 dhx=50 ohx=-100 nhy=3 dhy=60 ohy=-60
 # SS_OFFSET_PAR=  nhx=1 dhx=50 ohx=0 nhy=1 dhy=60 ohy=0
 # For test
 ANG_PAR=  oang=-55 nang=45 dang=2.5 niter_stomp=4 niter_lin=9
 HESS_PAR=  comsou=n grecin=y hestyp=2 rdmtype=2 offset=y
-GEOM_GXY= ngx=273 dgx=25 ogx=17500  ngy=175 dgy=30 ogy=-6210
-
+GEOM_GXY= ngx=121 dgx=0.02 ogx=-1.2  ngy=121 dgy=0.02 ogy=-1.2
 
 [Solver Vel Inversion]
-minval= 2800
-maxval= 3800
+minval= 1.8
+maxval= 2.4
 smooth_rect_sizes=80,70,40
 smooth_rect_reductions=1,1,0
 nrepeat=2

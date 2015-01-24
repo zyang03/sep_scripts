@@ -18,7 +18,7 @@ def self_doc():
 def Run(argv):
   eq_args_from_cmdline,args = sepbase.parse_args(argv[1:])
   dict_args = sepbase.RetrieveAllEqArgs(eq_args_from_cmdline)
-  param_reader = pbs_util.JobParamReader(dict_args)
+  param_reader = pbs_util.WeiParamReader(dict_args)
   pbs_script_creator = pbs_util.PbsScriptCreator(param_reader)
   wei_scriptor = pbs_util.WeiScriptor(param_reader)
   print dict_args
@@ -32,7 +32,7 @@ def Run(argv):
   fn_v3d = param_reader.fn_v3d
   ishot_list, nshot_list = pbs_util.GenShotsList(param_reader)
   # Initialize PbsSubmitter
-  pbs_submitter = pbs_util.PbsSubmitter(zip(param_reader.queues, param_reader.queues_cap), param_reader.njobs_max, pbs_script_creator.user)
+  pbs_submitter = pbs_util.PbsSubmitter(zip(param_reader.queues, param_reader.queues_cap), param_reader.total_jobs_cap, dict_args['user'])
 
   while True:
     pbs_submitter.WaitOnAllJobsFinish()
@@ -61,16 +61,14 @@ def Run(argv):
         scripts.append(wei_scriptor.CmdCsouForEachShot(ishl)+"\n")
         scripts.append(wei_scriptor.CmdBornModelingPerShot(ishl)+'\n')
         # Copy the data out.
-        cmd = "time Cp %s %s" % (wei_scriptor.fnt_crec, fn_shotfile)
+        cmd = "time Cp %s %s datapath=%s/" % (wei_scriptor.fnt_crec, fn_shotfile, path_out)
         scripts.append(cmd+pbs_util.CheckPrevCmdResultCShellScript(cmd)+'\n')
       scripts.append(pbs_script_creator.CmdFinalCleanUpTempDir())
       if script_needs_tobe_sumbitted:
         AllFilesComputed = False
         pbs_script_creator.CreateScriptForNewJob(sz_shotrange)
         fn_script = pbs_script_creator.fn_script
-        fp_o = open(fn_script,'a')
-        fp_o.writelines(scripts)
-        fp_o.close()
+        pbs_script_creator.AppendScriptsContent(scripts)
         pbs_submitter.SubmitJob(fn_script)
     # end for ish,nsh
     if AllFilesComputed: break
