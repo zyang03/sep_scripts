@@ -80,6 +80,13 @@ def get_sep_axis_params(file, iaxis):
   if len(out4)==0: out4=" "
   return [out1, out2, out3, out4]
 
+def put_sep_axis_params(file, iaxis, ax_info):
+  """Note that ax_info is a list of *strings* [n,o,d,label]."""
+  assert iaxis > 0
+  cmd = "echo n%d=%s o%d=%s d%d=%s label%d=%s >>%s" % (iaxis,ax_info[0], iaxis,ax_info[1], iaxis,ax_info[2], iaxis,ax_info[3], file)
+  RunShellCmd(cmd)
+  return
+
 def get_sep_axes_params(file,par,suffix):
   """par is a dictionary (both as input and as returned value) containing keys like 
   nsuffix_1, osuffix_1 etc."""

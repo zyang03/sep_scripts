@@ -26,6 +26,9 @@ nrepeat=2
 # The first iter should not change more than +/- 100m/s (in a rms sense) on average.
 initial_perturb_scale=20
 
+[RMO inversion]
+
+
 [SectionThree]
 FamilyName: Johnson
 

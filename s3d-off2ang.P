@@ -1,0 +1,22 @@
+ang_2d=n
+apply_jac=y
+create_coplanar_ang=y
+create_coplanar_stack=n
+create_stack=n
+number_aliases=0
+sign_khy=1.
+
+###a2h_mapping_method=1
+
+### From -60deg to 60deg
+gamma_n=41
+gamma_o=-60
+gamma_d=3
+
+n_hy_pad=18 n_hx_pad=18
+azim_n=6 azim_o=0 azim_d=30
+
+verb=y
+debug1=y
+debug2=y
+
