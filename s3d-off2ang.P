@@ -14,6 +14,8 @@ gamma_o=-60
 gamma_d=3
 
 n_hy_pad=18 n_hx_pad=18
+ohx=-0.16 dhx=0.04 nhx=9
+ohy=-0.16 dhy=0.04 nhy=9
 azim_n=6 azim_o=0 azim_d=30
 
 verb=y
