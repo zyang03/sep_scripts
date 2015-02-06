@@ -549,7 +549,7 @@ class SolverParamReader:
     self.initial_perturb_scale = float(dict_args['initial_perturb_scale'])
 
 
-class WeiInversionBookkeeper():
+class WeiInversionBookkeeper:
   # For resume_stage, different stages during the resume of program,
   # means synching right after IMG/DIMG/.../ operation.
   IMG_CALC = 0
@@ -612,4 +612,11 @@ iter=%d\nfn_v=%s\nfn_prefix=%s\nresume_stage=%s
     fp = open(save_filename,'wb')
     pickle.dump(self,fp)
     fp.close()
+
+
+def SplitFullFilePath(abs_file_path):
+  '''Split a filename into path, name, extension (without .dot).'''
+  fpath, fname = os.path.split(abs_file_path)
+  fbasename, fext = os.path.splitext(fname)
+  return (fpath,fbasename,fext)
 
