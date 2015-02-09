@@ -133,7 +133,10 @@ if __name__ == '__main__':
       batch_mig.Run(GenCmdlineArgsFromDict(eq_args_cmdline))
       wib.Save(WeiInversionBookkeeper.IMG_CALC,fn_save)
     fn_dimg = "%s-dimg.H" % fn_prefix
+    fn_bimgh0 = "%s-bimgh0.H" % fn_prefix; fn_imgh0zxy = "%s-imgh0zxy.H" % fn_prefix  # Optionally need this in RMO obj func.
     eq_args_cmdline["dimg"] = fn_dimg
+    eq_args_cmdline["bimgh0"] = fn_bimgh0
+    eq_args_cmdline["imgh0zxy"] = fn_imgh0zxy
     if in_loading_stage and wib.resume_stage >= WeiInversionBookkeeper.DIMG_CALC:
       assert pbs_util.CheckSephFileError(fn_dimg) == 0
       assert wib.objfunc != None
@@ -152,10 +155,8 @@ if __name__ == '__main__':
       batch_wet.Run(GenCmdlineArgsFromDict(eq_args_cmdline))
       # Restore frequency sampling scheme
       if str_ws_wnd_wet:
-        if str_ws_wnd:
-          eq_args_cmdline['ws_wnd'] = str_ws_wnd
-        else:
-          del eq_args_cmdline['ws_wnd']
+        if str_ws_wnd: eq_args_cmdline['ws_wnd'] = str_ws_wnd
+        else: del eq_args_cmdline['ws_wnd']
       # Compute search direction s_k from g_k [and s_{i-1}], and apply preconditioning (amplitude scaling and smoothing).
       wib.Save(WeiInversionBookkeeper.GRAD_CALC,fn_save)
     fn_srch = "%s-srch.H" % fn_prefix

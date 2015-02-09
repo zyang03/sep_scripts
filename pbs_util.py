@@ -311,6 +311,31 @@ class WeiScriptor:
     # The output dimension will always be the same as the input vel model.
     return cmd + cmd1+CheckPrevCmdResultCShellScript(cmd1)
 
+  def CmdWetomoimitPerShot(self, ish, image_domains = (None,)*6):
+    '''Generate shell cmd for doing the image-space tomoimit operator: dimg,bimgh0 ==> dvel.
+    image_domains: is a tuple of (xmin,xmax,ymin,ymax,zmin,zmax) that indicate the imaging domain.'''
+    cmd = '# Perform Wetomo adj for the current shot.\n'
+    path_tmp = self.param_reader.path_tmp
+    prefix = self.param_reader.prefix
+    self.fnt_output = '%s/dvel-%s-%04d.H' % (path_tmp,prefix,ish)
+    self.fnt_output_list.append(self.fnt_output)
+    wem_bin_path = self.dict_args['TANG_BIN']
+    final_cmd = cmd
+    if True:  # Do the cost-saving way
+      cmd1 = "time %s/bwi-wet3d-Zh.x %s mode=tomimit csou=%s dimg=%s bimgh0=%s bvel=%s dvel=%s datapath=%s/" % (
+          wem_bin_path,self.dict_args['MIG_PAR_WAZ3D'], self.fnt_csou,self.fnt_dimg,self.fnt_bimgh0,self.fnt_bvel,self.fnt_output, path_tmp)
+    # The output dimension will always be the same as the input vel model.
+      final_cmd += cmd1+CheckPrevCmdResultCShellScript(cmd1)
+    else :  # Do the more expensive way
+      self.fnt_h0_crec = '%s/crec-h0-%04d.H' % (path_tmp,ish)
+      cmd1 = "time %s/bwi-wem3d-Zh.x %s %s mode=imgfwd crec=%s csou=%s bimg=%s bvel=%s datapath=%s/" % (
+          wem_bin_path, self.dict_args['MIG_PAR_WAZ3D'], self.dict_args['GEOM_GXY'], self.fnt_h0_crec, self.fnt_csou, self.fnt_bimgh0,self.fnt_bvel, path_tmp)
+      final_cmd += cmd1+CheckPrevCmdResultCShellScript(cmd1)
+      cmd2 = "time %s/bwi-wet3d-Zh.x %s mode=tomadj csou=%s dimg=%s crec=%s bvel=%s dvel=%s datapath=%s/" % (
+          wem_bin_path,self.dict_args['MIG_PAR_WAZ3D'], self.fnt_csou,self.fnt_dimg,self.fnt_h0_crec,self.fnt_bvel,self.fnt_output, path_tmp)
+      final_cmd += cmd2+CheckPrevCmdResultCShellScript(cmd2)
+    return final_cmd
+
   def CmdMigrationPerShot(self, ish, image_domains = (None,)*6):
     '''Generate shell cmd for doing the migration.
     image_domains: is a tuple of (xmin,xmax,ymin,ymax,zmin,zmax) that indicate the imaging domain.'''
@@ -351,15 +376,24 @@ class WeiScriptor:
     path_tmp = self.param_reader.path_tmp
     self.fnt_bvel = '%s/vel-%s.H' % (path_tmp,self.sz_shotrange)
     cmd1 = "time Cp %s %s datapath=%s/" % (fn_v3d, self.fnt_bvel, path_tmp)
-
     return cmd + cmd1+CheckPrevCmdResultCShellScript(cmd1)
+
   def CmdCpbimgForEachJob(self):
     cmd = '# Copy the background image(reflectivity model) file to local disk.\n'
     path_tmp = self.param_reader.path_tmp
     self.fn_bimg = abspath(self.dict_args["bimg"])
     self.fnt_bimg = '%s/bimg-%s.H' % (path_tmp,self.sz_shotrange)
     # For cping base imgh to local folder.
-    cmd1 = "time Cp <%s >%s datapath=%s/" % (self.fn_bimg,self.fnt_bimg, path_tmp)
+    cmd1 = "time Cp %s %s datapath=%s/" % (self.fn_bimg,self.fnt_bimg, path_tmp)
+    return cmd + cmd1+CheckPrevCmdResultCShellScript(cmd1)
+  
+  def CmdCpbimgh0ForEachJob(self):  # For tomoimit
+    cmd = '# Copy the background zero-offset image file to local disk.\n'
+    path_tmp = self.param_reader.path_tmp
+    self.fn_bimgh0 = abspath(self.dict_args["bimgh0"])
+    self.fnt_bimgh0 = '%s/bimgh0-%s.H' % (path_tmp,self.sz_shotrange)
+    # For cping base imgh to local folder.
+    cmd1 = "time Cp %s %s datapath=%s/" % (self.fn_bimgh0,self.fnt_bimgh0, path_tmp)
     return cmd + cmd1+CheckPrevCmdResultCShellScript(cmd1)
 
   def CmdCpdimgForEachJob(self):

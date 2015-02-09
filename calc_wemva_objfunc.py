@@ -64,7 +64,9 @@ def Run(argv):
   b = dict_args.get('calc_ang_gather')
   calc_ang_gather = (b=='y' or b=='1')
   if calc_ang_gather:  # Need to compute angle gather first.
-    fn_imgh0_zxy = os.path.abspath(dict_args['imgh0zxy'])
+    fn_imgh0_hxyxyz = os.path.abspath(dict_args['bimgh0'])
+    imgh0_path, imgh0_base, _ = pbs_util.SplitFullFilePath(fn_imgh0_hxyxyz)
+    fn_imgh0_zxy = "%s/%s-zxy.H" % (imgh0_path, imgh0_base)
     fn_img_ang = "%s/%s-ang.H" % (fn_img_path, fn_img_base_wo_ext)
     fn_dimg_ang = "%s/%s-ang.H" % (fn_dimg_path, fn_dimg_base_wo_ext)
     while True:
@@ -83,8 +85,10 @@ def Run(argv):
 # (gamma, azim, kx,ky,kz) -> transp ->(kx,ky,kz,gamma,azim) -> YFt3d->
 # (x,y,z,gamma,azim) -> transp -> (z,gamma,azim,x,y)\n'''
         scripts.append(cmd)
-        cmd = "time Window3d <%s n1=1 n2=1 min1=0 min2=0 datapath=%s/ | YReorder reshape=2,3 mapping=2,1 >%s datapath=%s/ " % (fn_img,path_tmp, fn_imgh0_zxy,fn_img_path)
-        scripts.append(cmd+CheckPrevCmdResultCShellScript(cmd))
+        cmd1 = "time Window3d <%s n1=1 n2=1 min1=0 min2=0 squeeze=n >%s datapath=%s/ " % (fn_img, fn_imgh0_hxyxyz, imgh0_path)
+        cmd2 = "<%s %s/YReorder reshape=2,4,5 mapping=3,2,1 >%s datapath=%s/ " % (fn_imgh0_hxyxyz, dict_args['YANG_BIN'], fn_imgh0_zxy,imgh0_path)
+        scripts.append(cmd1+CheckPrevCmdResultCShellScript(cmd1))
+        scripts.append(cmd2+CheckPrevCmdResultCShellScript(cmd2))
         cmd1 = "time %s/YTransp12.x <%s reshape=2,5 >%s/t1.H datapath=%s/" % (dict_args['YANG_BIN'], fn_img, path_tmp, path_tmp)
         cmd2 = "time %s/YFt3d <%s/t1.H nth=8 n1=%s n2=%s n3=%s sign1=1 sign2=1 sign3=1 >%s/t2.H IOtype=r2c datapath=%s/" % (dict_args['YANG_BIN'], path_tmp, dict_args['nkx'],dict_args['nky'],dict_args['nkz'], path_tmp, path_tmp)
         cmd3 = "time %s/YTransp12.x <%s/t2.H reshape=3,5 >%s/t3.H datapath=%s/" % (dict_args['YANG_BIN'], path_tmp,path_tmp,path_tmp)
@@ -200,10 +204,12 @@ def Run(argv):
         scripts.append(cmd4+CheckPrevCmdResultCShellScript(cmd4))
         scripts.append(pbs_script_creator.CmdFinalCleanUpTempDir())
         pbs_submitter.SubmitJob(pbs_script_creator.AppendScriptsContent(scripts))
-      # Now the off gather image is ready, put back the correct axis dimensions.
-      sepbase.put_sep_axis_params(fn_img_ang,1,ax_x)
-      sepbase.put_sep_axis_params(fn_img_ang,2,ax_y)
-      sepbase.put_sep_axis_params(fn_img_ang,3,ax_z)
+    # end while loop
+    print "put right axis into fn_dimg: %s " % fn_dimg
+    # Now the off gather image is ready, put back the correct axis dimensions.
+    sepbase.put_sep_axis_params(fn_dimg,3,ax_x)
+    sepbase.put_sep_axis_params(fn_dimg,4,ax_y)
+    sepbase.put_sep_axis_params(fn_dimg,5,ax_z)
   return obj_func_value
 
 if __name__ == '__main__':

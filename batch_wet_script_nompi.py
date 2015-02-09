@@ -7,17 +7,17 @@ def self_doc():
   print 
 
 ## This program will try to batch generate velocity updates from wave-equation tomography operator.
-# Usage1:    *.py param=waz3d.param pbs_template=pbs_script_tmpl.sh nfiles=1001 nfiles_perbatch=10 path=path_out prefix=hess-waz3d queue=q35 nnodes=0 njobmax=5 ish_beg=0 vel=vel.H dimg=dimg.H prefix=pf dvel=output.H
+# Usage1:    *.py param=waz3d.param pbs_template=pbs_script_tmpl.sh nfiles=1001 nfiles_perbatch=10 path=path_out prefix=hess-waz3d queue=q35 nnodes=0 njobmax=5 ish_beg=0 vel=vel.H dimg=dimg.H prefix=pf dvel=output.H mode=tomadj,tomimit bimgh0=imgh0-hxyxyz.H
 
 def Run(argv):
   print "Run script with params:", argv
   eq_args_from_cmdline,args = sepbase.parse_args(argv)
   dict_args = sepbase.RetrieveAllEqArgs(eq_args_from_cmdline)
   param_reader = pbs_util.WeiParamReader(dict_args)
+  
   prefix = dict_args['prefix']
   fn_dvel_final  = os.path.abspath(dict_args['dvel'])  # Final output (after stacking over all jobs).
-  _, fn_final_basename = os.path.split(fn_dvel_final)
-  fn_base_wo_ext = os.path.splitext(fn_final_basename)[0]
+  _, fn_base_wo_ext, _ = pbs_util.SplitFullFilePath(fn_dvel_final)
   # fn_base_wo_ext serves as a unique identifier.
   N = param_reader.nfiles
   n = param_reader.nfiles_perjob
@@ -37,6 +37,13 @@ def Run(argv):
   pbs_submitter = pbs_util.PbsSubmitter(zip(param_reader.queues, param_reader.queues_cap), param_reader.total_jobs_cap, dict_args['user'])
   # See if specify image/Hessian/dvel dimensions in cmdline
   [xmin_cmdl,xmax_cmdl, ymin_cmdl,ymax_cmdl, zmin_cmdl,zmax_cmdl] = param_reader.g_output_image_domain
+  # Check tomadj or tomimit
+  mode = dict_args['mode']
+  if mode == 'tomadj':
+    assert dict_args.get('bimgh0') is None
+  elif mode == 'tomimit':
+    fn_bimgh0 = os.path.abspath(dict_args['bimgh0'])
+  else:  assert False
   # First check if the final dvel exists, if so we can return the result directly.
   if pbs_util.CheckSephFileError(fn_dvel_final,False)==0:
     print "final dvel already in place, skip: %s" % fn_dvel_final
@@ -65,7 +72,10 @@ def Run(argv):
       # Append commands to the end of the created script file
       scripts = []
       scripts.append(wei_scriptor.CmdCpbvelForEachJob()+'\n')
-      scripts.append(wei_scriptor.CmdCpdimgForEachJob()+'\n\n')
+      scripts.append(wei_scriptor.CmdCpdimgForEachJob()+'\n')
+      if mode == 'tomimit':
+        scripts.append(wei_scriptor.CmdCpbimgh0ForEachJob()+'\n')
+      scripts.append('\n')
       xmin_g = xmax_g = ymin_g = ymax_g = None
       # Do nfiles_per_batch shots at once
       for ii in range(0,nsh):
@@ -73,12 +83,14 @@ def Run(argv):
         # First prepare the input csou/data etc.
         scripts.append(wei_scriptor.CmdCsouForEachShot(ishl))
         fn_shotfile = shots_info.ShotFileNameAt(ishl)
-        scripts.append(wei_scriptor.CmdCpCrecForEachShot(ishl, fn_shotfile))
         xmin_1, xmax_1, ymin_1, ymax_1 = shots_info.ShotFileApertureAt(ishl)
         # Find the overlap between 1shot imaging aperture and the final imaging domain
         xmin_1,xmax_1,ymin_1,ymax_1 = pbs_util.OverlapRectangle([xmin_1,xmax_1,ymin_1,ymax_1],[xmin_cmdl,xmax_cmdl,ymin_cmdl,ymax_cmdl])
-        cmd2 = wei_scriptor.CmdWetomoPerShot(ishl,
-            (xmin_1,xmax_1, ymin_1,ymax_1, zmin_cmdl,zmax_cmdl))
+        if mode == 'tomimit':
+          cmd2 = wei_scriptor.CmdWetomoimitPerShot(ishl,(xmin_1,xmax_1, ymin_1,ymax_1, zmin_cmdl,zmax_cmdl))
+        else:  # conventional tomadj
+          scripts.append(wei_scriptor.CmdCpCrecForEachShot(ishl, fn_shotfile))
+          cmd2 = wei_scriptor.CmdWetomoPerShot(ishl,(xmin_1,xmax_1, ymin_1,ymax_1, zmin_cmdl,zmax_cmdl))
         scripts.append(cmd2+ "\n");
         xmin_g,xmax_g,ymin_g,ymax_g = pbs_util.UnionRectangle([xmin_1,xmax_1,ymin_1,ymax_1],[xmin_g,xmax_g,ymin_g,ymax_g])
       # end for ish,nsh
