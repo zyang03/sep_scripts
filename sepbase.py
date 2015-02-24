@@ -211,6 +211,14 @@ def find_files(args,eqs):
   eqs["ndata"]=count
   return count,eqs
 
+def ParseBooleanString(val_str):
+  if val_str == 'y' or val_str == "1":
+    return True
+  elif val_str == 'n' or val_str == "0":
+    return False
+  else:
+    assert False, "val_str=%s, invalid for a boolean value" % val_str
+
 
 import ConfigParser
 
@@ -236,6 +244,9 @@ def RetrieveAllEqArgs(eq_args_from_cmdline):
     dict_args['user'] = os.environ['USER']
   return dict_args
 
+def GenCmdlineArgsFromDict(eq_args):
+  '''Return a list of string that contains all key=val pairs in eq_args.'''
+  return ["%s=%s" % (key,eq_args[key]) for key in eq_args]
 
 def ConfigurationFromIniFile(param_file):
   '''Parse a Ini format parameter file, and return the config object.'''

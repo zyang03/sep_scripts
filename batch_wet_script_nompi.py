@@ -40,7 +40,7 @@ def Run(argv):
   # Check tomadj or tomimit
   mode = dict_args['mode']
   if mode == 'tomadj':
-    assert dict_args.get('bimgh0') is None
+    pass
   elif mode == 'tomimit':
     fn_bimgh0 = os.path.abspath(dict_args['bimgh0'])
   else:  assert False

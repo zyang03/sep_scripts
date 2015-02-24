@@ -1,0 +1,24 @@
+ang_2d=n
+apply_jac=y
+create_coplanar_ang=y
+create_coplanar_stack=n
+create_stack=n
+number_aliases=0
+sign_khy=1.
+
+###a2h_mapping_method=1
+
+### From -35deg to 35deg
+gamma_n=29 gamma_o=-35 gamma_d=2.5 
+azim_n=6 azim_o=0 azim_d=30
+
+n_hx_pad=24 n_hy_pad=20
+#n_hx_pad=8 n_hy_pad=10
+
+ohx=-500 dhx=50 nhx=21 ohy=-540 dhy=60 nhy=19
+#ohx=-150 dhx=50 nhx=7 ohy=-240 dhy=60 nhy=9
+
+verb=y
+debug1=y
+debug2=y
+

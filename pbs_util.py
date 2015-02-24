@@ -566,6 +566,22 @@ def UnionRectangle(rect1, rect2):
     ymin_1 = min(ymin_1,ymin_2); ymax_1 = max(ymax_1,ymax_2)
   return [xmin_1,xmax_1,ymin_1,ymax_1]
 
+class WemvaTypeParser:
+  def __init__(self, wemva_type, calc_dimg):
+    self._map_wemva_type_calc_ang = {
+        "1" : (False, False), # Stack Power
+        "11": (False, True),  # RMO
+        "61": (False, False), # DSO
+        "62": (False, False)
+    }
+    if not calc_dimg:
+      self.calc_ang_gather = self._map_wemva_type_calc_ang[wemva_type][0]
+    else:
+      self.calc_ang_gather = self._map_wemva_type_calc_ang[wemva_type][1]
+    self.tomo_mode = "tomadj"
+    if wemva_type == "11":
+      self.tomo_mode = "tomimit"
+    return
 
 class SolverParamReader:
   '''Hold all solver parameters for wei inversion.'''

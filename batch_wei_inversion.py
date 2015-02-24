@@ -9,7 +9,6 @@ import batch_wet_script_nompi as batch_wet
 import calc_wemva_objfunc as wemva_obj
 
 ## This program glues all the batch processed wave-equation operators to make an inversion loop.
-
 # Usage: *.py param=waz3d.param pbs_template=pbs_script_tmpl.sh nfiles=1001 nfiles_perjob=10 path=path_out prefix=waz3d queues=q35,default nnodes=0 njobmax=5 ish_beg=0 vel=vel.H niter=10 iiter=0 path_iter=path_to_save_results_per_iteration load_save=load_fn,save_fn
 # load_save is the bookkeeping object after seralization, this is used for resuming computation.
 
@@ -56,10 +55,6 @@ def ComputeOptimalStepSize(alpha1,alpha2,costfunc0,costfunc1,costfunc2):
       pass
   return opt_stepsize
 
-def GenCmdlineArgsFromDict(eq_args):
-  '''Return a long string that contains all key=val pairs in eq_args.'''
-  return ["%s=%s" % (key,eq_args[key]) for key in eq_args]
-
 if __name__ == '__main__':
   eq_args_cmdline,args = sepbase.parse_args(sys.argv[1:])
   assert args == []
@@ -73,6 +68,9 @@ if __name__ == '__main__':
   iter_beg = int(dict_args.get('iter_beg',0))
   str_ws_wnd_wet = dict_args.get('ws_wnd_wet')  # Might use different frequency sampling for tomo operator.
   str_ws_wnd = dict_args.get('ws_wnd')
+  wemva_type_parser = pbs_util.WemvaTypeParser(dict_args['wemva_type'],True)
+  assert 'mode' not in dict_args
+  eq_args_cmdline['mode'] = wemva_type_parser.tomo_mode
   # The inversion code, v is vel model, s is search direction.
   fn_v0 = dict_args['vel']; # v is the current iteration vel model.
   fn_srch = ""; fn_srch_prev = ""
@@ -130,7 +128,7 @@ if __name__ == '__main__':
     else:  # Record status and make a save
       wib.smooth_rects_history.append(wib.smooth_rects[:])
       wib.fn_prefix = fn_prefix
-      batch_mig.Run(GenCmdlineArgsFromDict(eq_args_cmdline))
+      batch_mig.Run(sepbase.GenCmdlineArgsFromDict(eq_args_cmdline))
       wib.Save(WeiInversionBookkeeper.IMG_CALC,fn_save)
     fn_dimg = "%s-dimg.H" % fn_prefix
     fn_bimgh0 = "%s-bimgh0.H" % fn_prefix; fn_imgh0zxy = "%s-imgh0zxy.H" % fn_prefix  # Optionally need this in RMO obj func.
@@ -141,7 +139,7 @@ if __name__ == '__main__':
       assert pbs_util.CheckSephFileError(fn_dimg) == 0
       assert wib.objfunc != None
     else:
-      wib.objfunc = wemva_obj.Run(GenCmdlineArgsFromDict(eq_args_cmdline))
+      wib.objfunc = wemva_obj.Run(sepbase.GenCmdlineArgsFromDict(eq_args_cmdline))
       wib.Save(WeiInversionBookkeeper.DIMG_CALC,fn_save)
     # Compute gradient dvel from dimg using WET operator.
     fn_dv = "%s-dvel.H" % fn_prefix
@@ -152,7 +150,7 @@ if __name__ == '__main__':
       # Change the frequency sampling scheme
       if str_ws_wnd_wet:
         eq_args_cmdline['ws_wnd'] = str_ws_wnd_wet
-      batch_wet.Run(GenCmdlineArgsFromDict(eq_args_cmdline))
+      batch_wet.Run(sepbase.GenCmdlineArgsFromDict(eq_args_cmdline))
       # Restore frequency sampling scheme
       if str_ws_wnd_wet:
         if str_ws_wnd: eq_args_cmdline['ws_wnd'] = str_ws_wnd
@@ -197,23 +195,23 @@ if __name__ == '__main__':
       assert pbs_util.CheckSephFileError(fn_img1,False)==0
     else:
       eq_args_cmdline["vel"] = fn_v1; eq_args_cmdline["img"] = fn_img1
-      batch_mig.Run(GenCmdlineArgsFromDict(eq_args_cmdline))
+      batch_mig.Run(sepbase.GenCmdlineArgsFromDict(eq_args_cmdline))
       wib.Save(WeiInversionBookkeeper.IMG1_CALC,fn_save)
     if in_loading_stage and wib.resume_stage >= WeiInversionBookkeeper.OBJ1_CALC:
       assert wib.objfunc1 != None
     else:
-      wib.objfunc1 = wemva_obj.Run(GenCmdlineArgsFromDict(eq_args_cmdline))
+      wib.objfunc1 = wemva_obj.Run(sepbase.GenCmdlineArgsFromDict(eq_args_cmdline))
       wib.Save(WeiInversionBookkeeper.OBJ1_CALC,fn_save)
     if in_loading_stage and wib.resume_stage >= WeiInversionBookkeeper.IMG2_CALC:
       assert pbs_util.CheckSephFileError(fn_img2,False)==0
     else:
       eq_args_cmdline["vel"] = fn_v2; eq_args_cmdline["img"] = fn_img2
-      batch_mig.Run(GenCmdlineArgsFromDict(eq_args_cmdline))
+      batch_mig.Run(sepbase.GenCmdlineArgsFromDict(eq_args_cmdline))
       wib.Save(WeiInversionBookkeeper.IMG2_CALC,fn_save)
     if in_loading_stage and wib.resume_stage >= WeiInversionBookkeeper.OBJ2_CALC:
       assert wib.objfunc2 != None
     else:
-      wib.objfunc2 = wemva_obj.Run(GenCmdlineArgsFromDict(eq_args_cmdline))
+      wib.objfunc2 = wemva_obj.Run(sepbase.GenCmdlineArgsFromDict(eq_args_cmdline))
       wib.Save(WeiInversionBookkeeper.OBJ2_CALC,fn_save)
 
     fn_vn = "%s-velnew.H" % fn_prefix
