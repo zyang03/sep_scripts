@@ -12,7 +12,6 @@ import calc_wemva_objfunc as wemva_obj
 # Usage: *.py param=waz3d.param pbs_template=pbs_script_tmpl.sh nfiles=1001 nfiles_perjob=10 path=path_out prefix=waz3d queues=q35,default nnodes=0 njobmax=5 ish_beg=0 vel=vel.H niter=10 iiter=0 path_iter=path_to_save_results_per_iteration load_save=load_fn,save_fn
 # load_save is the bookkeeping object after seralization, this is used for resuming computation.
 
-
 def FitParabola(x_coefs, func_vals):
   '''Given 3 points of (x,y), return the fitted parabola coefs [a,b,c] (ax^2+bx+c).'''
   x1,x2,x3 = x_coefs

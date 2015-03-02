@@ -63,7 +63,7 @@ def Run(argv):
       AllFilesComputed = False
       # Append commands to the end of the created script file
       scripts = []
-      scripts.append(wei_scriptor.CmdCpbvelForEachJob()+'\n\n')    
+      scripts.append(wei_scriptor.CmdCpbvelForEachJob(zmax_cmdl)+'\n\n')    
       xmin_g = xmax_g = ymin_g = ymax_g = None
       # Do nfiles_per_batch shots at once
       for ii in range(0,nsh):
