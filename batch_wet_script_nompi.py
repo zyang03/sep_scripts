@@ -8,6 +8,7 @@ def self_doc():
 
 ## This program will try to batch generate velocity updates from wave-equation tomography operator.
 # Usage1:    *.py param=waz3d.param pbs_template=pbs_script_tmpl.sh nfiles=1001 nfiles_perbatch=10 path=path_out prefix=hess-waz3d queue=q35 nnodes=0 njobmax=5 ish_beg=0 vel=vel.H dimg=dimg.H prefix=pf dvel=output.H mode=tomadj,tomimit bimgh0=imgh0-hxyxyz.H
+# Notice: The final output dvel will always be same size as the input vel, but for each shot, we can shrink the z dimension to save computation.
 
 def Run(argv):
   print "Run script with params:", argv
@@ -35,8 +36,8 @@ def Run(argv):
   wei_scriptor = pbs_util.WeiScriptor(param_reader)
   assert param_reader.queues[0] != 'default'  # Put sep queue ahead of the default queue.
   pbs_submitter = pbs_util.PbsSubmitter(zip(param_reader.queues, param_reader.queues_cap), param_reader.total_jobs_cap, dict_args['user'])
-  # See if specify image/Hessian/dvel dimensions in cmdline
-  [xmin_cmdl,xmax_cmdl, ymin_cmdl,ymax_cmdl, zmin_cmdl,zmax_cmdl] = param_reader.g_output_image_domain
+  # See if specify image/Hessian/dvel dimensions in cmdline, don't further shrink x,y direction, but z domain can be shrinked to reduce the computational cost in a layer-stripping type of strategy.
+  [zmin_cmdl,zmax_cmdl] = param_reader.g_output_image_domain[4:6]
   # Check tomadj or tomimit
   mode = dict_args['mode']
   if mode == 'tomadj':
@@ -71,28 +72,23 @@ def Run(argv):
       AllFilesComputed = False
       # Append commands to the end of the created script file
       scripts = []
-      scripts.append(wei_scriptor.CmdCpbvelForEachJob()+'\n')
+      scripts.append(wei_scriptor.CmdCpbvelForEachJob(zmax_cmdl)+'\n')
       scripts.append(wei_scriptor.CmdCpdimgForEachJob()+'\n')
       if mode == 'tomimit':
         scripts.append(wei_scriptor.CmdCpbimgh0ForEachJob()+'\n')
       scripts.append('\n')
-      xmin_g = xmax_g = ymin_g = ymax_g = None
       # Do nfiles_per_batch shots at once
       for ii in range(0,nsh):
         ishl = ish+ii
         # First prepare the input csou/data etc.
         scripts.append(wei_scriptor.CmdCsouForEachShot(ishl))
         fn_shotfile = shots_info.ShotFileNameAt(ishl)
-        xmin_1, xmax_1, ymin_1, ymax_1 = shots_info.ShotFileApertureAt(ishl)
-        # Find the overlap between 1shot imaging aperture and the final imaging domain
-        xmin_1,xmax_1,ymin_1,ymax_1 = pbs_util.OverlapRectangle([xmin_1,xmax_1,ymin_1,ymax_1],[xmin_cmdl,xmax_cmdl,ymin_cmdl,ymax_cmdl])
         if mode == 'tomimit':
-          cmd2 = wei_scriptor.CmdWetomoimitPerShot(ishl,(xmin_1,xmax_1, ymin_1,ymax_1, zmin_cmdl,zmax_cmdl))
+          cmd2 = wei_scriptor.CmdWetomoimitPerShot(ishl)
         else:  # conventional tomadj
           scripts.append(wei_scriptor.CmdCpCrecForEachShot(ishl, fn_shotfile))
-          cmd2 = wei_scriptor.CmdWetomoPerShot(ishl,(xmin_1,xmax_1, ymin_1,ymax_1, zmin_cmdl,zmax_cmdl))
+          cmd2 = wei_scriptor.CmdWetomoPerShot(ishl)
         scripts.append(cmd2+ "\n");
-        xmin_g,xmax_g,ymin_g,ymax_g = pbs_util.UnionRectangle([xmin_1,xmax_1,ymin_1,ymax_1],[xmin_g,xmax_g,ymin_g,ymax_g])
       # end for ish,nsh
       # Now copy the results cubes out, if multiple shots then combine them first
       fnt_output_list = wei_scriptor.fnt_output_list
@@ -108,10 +104,8 @@ def Run(argv):
   # Now combine all dvel files together, use a new pbs_submitter, need to use the non-default queue.
   pbs_submitter = pbs_util.PbsSubmitter([(param_reader.queues[0], param_reader.queues_cap[0])], None, dict_args['user'])
   scripts = []; combine_pars = ""
-  if xmin_cmdl is not None:
-    combine_pars = "oe1=%g,%g oe2=%g,%g ndim=3" % (xmin_cmdl,xmax_cmdl,ymin_cmdl,ymax_cmdl)
-  scripts.append(pbs_script_creator.CmdCombineMultipleOutputSephFiles(
-      fn_output_list_all, fn_dvel_final, combine_pars))
+  #if xmin_cmdl is not None: combine_pars = "oe1=%g,%g oe2=%g,%g ndim=3" % (xmin_cmdl,xmax_cmdl,ymin_cmdl,ymax_cmdl)
+  scripts.append(pbs_script_creator.CmdCombineMultipleOutputSephFiles(fn_output_list_all, fn_dvel_final, combine_pars,None,param_reader.fn_v3d))
   pbs_script_creator.CreateScriptForNewJob(fn_base_wo_ext)
   pbs_submitter.SubmitJob(pbs_script_creator.AppendScriptsContent(scripts))
   pbs_submitter.WaitOnAllJobsFinish(fn_base_wo_ext)

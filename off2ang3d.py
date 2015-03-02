@@ -36,16 +36,15 @@ def Run(argv):
   assert file_error == 0, "The input file: %s is incorrect: %d" % (fn_img, file_error)
   # string fn_img_base_wo_ext serves as a single unique identifier.
   fn_img_path, fn_img_base_wo_ext, _ = pbs_util.SplitFullFilePath(fn_img)
-  fn_img_out = os.path.abspath.dict_args.get['imgout']
+  fn_img_out = os.path.abspath(dict_args['imgout'])
   # Initialize script_creators and PbsSubmitter.
   pbs_script_creator = pbs_util.PbsScriptCreator(param_reader)
   pbs_submitter = pbs_util.PbsSubmitter(zip(param_reader.queues, param_reader.queues_cap),param_reader.total_jobs_cap, dict_args['user'])
-  pbs_script_creator.CreateScriptForNewJob(job_identifier)
-  scripts = []
   if boff2ang:  # Then input is off img.
     ax_x = sepbase.get_sep_axis_params(fn_img,3); ax_y = sepbase.get_sep_axis_params(fn_img,4)
     ax_z = sepbase.get_sep_axis_params(fn_img,5)
     job_identifier = 'ang-' + fn_img_base_wo_ext
+    pbs_script_creator.CreateScriptForNewJob(job_identifier); scripts = []
     cmd = '''
 # (hx,hy,x,y,z)->transp->(x,y,z,hx,hy)->YFt3d->
 # (kx,ky,kz,hx,hy)->transp->(hx,hy,kx,ky,kz)->Off2Ang3d_kxyz.x->
@@ -80,6 +79,7 @@ def Run(argv):
     ax_x = sepbase.get_sep_axis_params(fn_img,4); ax_y = sepbase.get_sep_axis_params(fn_img,5)
     ax_z = sepbase.get_sep_axis_params(fn_img,1)
     job_identifier = 'off-' + fn_img_base_wo_ext
+    pbs_script_creator.CreateScriptForNewJob(job_identifier); scripts = []
     cmd = '''
 # (z,gamma,azim,x,y) -> Transp -> (x,y,z,gamma,azim) -> Ft3d ->
 # (kx,ky,kz,gamma,azim) -> Transp -> (gamma,azim,kx,ky,kz) -> Off2Ang3d_kxyz.x ->

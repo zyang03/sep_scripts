@@ -370,12 +370,15 @@ class WeiScriptor:
           wem_bin_path, self.dict_args['MIG_PAR_WAZ3D'], self.dict_args['GEOM_GXY'], self.fnt_crec, self.fnt_csou, self.fnt_bimg,self.fnt_bvel, path_tmp)
     return cmd + cmd1+CheckPrevCmdResultCShellScript(cmd1)
 
-  def CmdCpbvelForEachJob(self):
+  def CmdCpbvelForEachJob(self, zmax=None):  # Notice we can not change zmin, because the wfld has to propagate from the very top of model.
     cmd = '# Copy the background vel model file to local disk.\n'
     fn_v3d = self.param_reader.fn_v3d
     path_tmp = self.param_reader.path_tmp
     self.fnt_bvel = '%s/vel-%s.H' % (path_tmp,self.sz_shotrange)
-    cmd1 = "time Cp %s %s datapath=%s/" % (fn_v3d, self.fnt_bvel, path_tmp)
+    if zmax is None:
+      cmd1 = "time Cp %s %s out=%s@ " % (fn_v3d, self.fnt_bvel, self.fnt_bvel)
+    else:
+      cmd1 = "time %s/YWindow3d max3=%g <%s >%s out=%s@ " % (self.dict_args['YANG_BIN'], zmax, fn_v3d, self.fnt_bvel,self.fnt_bvel)
     return cmd + cmd1+CheckPrevCmdResultCShellScript(cmd1)
 
   def CmdCpbimgForEachJob(self):
@@ -545,7 +548,7 @@ def OverlapRectangle(rect1,rect2):
   '''Compute the overlap between two rectangles, the elements in rect2 can be empty.
   '''
   xmin_1,xmax_1,ymin_1,ymax_1 = rect1
-  xmin_2,ymax_2,ymin_2,ymax_2 = rect2
+  xmin_2,xmax_2,ymin_2,ymax_2 = rect2
   if xmin_2 is not None:
     xmin_1 = max(xmin_1,xmin_2); xmax_1 = min(xmax_1,xmax_2)
   if ymin_2 is not None:
