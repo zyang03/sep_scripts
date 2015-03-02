@@ -103,7 +103,7 @@ while 1:
 			if iline>2: # the rest, start with the shots filename
 				str_lists = (line).split(" ")
 				fn_shot = str_lists[0] #read the geom information of the shot file
-				his_eachshot={}; get_sep_params(fn_shot,his_eachshot,"g")
+				his_eachshot={}; get_sep_axes_params(fn_shot,his_eachshot,"g")
 				#print fn_shot,his_eachshot
 				ogx = float(his_eachshot["og_1"]); ngx=int(his_eachshot["ng_1"]); dgx=float(his_eachshot["dg_1"])
 				ogy = float(his_eachshot["og_2"]); ngy=int(his_eachshot["ng_2"]); dgy=float(his_eachshot["dg_2"])
