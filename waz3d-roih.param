@@ -1,0 +1,15 @@
+[OnewayWet]
+# Params for oneway Wave-equation tomography code by Tang.
+TANG_BIN=  /data/sep/zyang03/other/yaxun_weo/bin
+YANG_BIN=  /data/sep/zyang03/bin
+#MIG_PAR_WAZ3D_PT=  pdip=65 oper=ssfpi nvrf=4 nws=100 nxpad_beg=25 nxpad_end=25 nypad_beg=25 nypad_end=25 ntpx=25 ntpy=25 memchk=n comsou=n offset=y
+
+# Plane-wave, target region only.
+source_type= pt
+MIG_PAR_WAZ3D=  pdip=65 oper=ssfpi nvrf=4 nws=150 nxpad_beg=20 nxpad_end=20 nypad_beg=20 nypad_end=20 ntpx=20 ntpy=20 memchk=n report=y comsou=n offset=y
+SS_OFFSET_PAR=  nhx=21 dhx=50 ohx=-500 nhy=19 dhy=60 ohy=-540
+# For test
+#ANG_PAR=  oang=-55 nang=45 dang=2.5 niter_stomp=4 niter_lin=9
+HESS_PAR=  comsou=n grecin=y hestyp=2 rdmtype=2 offset=y
+GEOM_GXY= ngx=273 dgx=25 ogx=17500  ngy=175 dgy=30 ogy=-6210
+
