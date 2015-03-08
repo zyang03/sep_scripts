@@ -429,9 +429,8 @@ class WeiScriptor:
     # If user only select a portion of frequencies to migrate/compute/model, w_f,w_n
     ws_wnd_f, ws_wnd_n, ws_wnd_d = self.param_reader.ws_wnd_f, self.param_reader.ws_wnd_n, self.param_reader.ws_wnd_d
     fn_csou = self.param_reader.fn_csou
-    fnt_csou = "%s/csou-plane-%04d.H" % (path_tmp, ish)  # Append the filename fn_csou with shotIndex as the new filename.
-    self.fnt_csou = fnt_csou
     if self.param_reader.source_type == 'plane':
+      fnt_csou = "%s/csou-plane-%04d.H" % (path_tmp, ish)  # Append the filename fn_csou with shotIndex as the new filename.
       # The source func for each shot is different. Needs to do Window based on it.
       n4 = int(sepbase.get_sep_axis_params(fn_csou,4)[0])
       f5 = ish / n4
@@ -442,11 +441,13 @@ class WeiScriptor:
       else:
         cmd2 = "Window3d <%s n4=1 n5=1 f4=%d f5=%d >%s squeeze=n datapath=%s/ "%(fn_csou,f4,f5,fnt_csou,path_tmp)
     else:  # Point Source
+      fnt_csou = "%s/csou-pt-%04d.H" % (path_tmp, ish)  # Append the filename fn_csou with shotIndex as the new filename.
       if ws_wnd_n is not None:
         cmd2 = "Window3d <%s f3=%d n3=%d j3=%d >%s squeeze=n datapath=%s/ " % (
             fn_csou,ws_wnd_f,ws_wnd_n,ws_wnd_d, fnt_csou,path_tmp)
       else:
         cmd2 = "Cp %s %s datapath=%s/ "%(fn_csou, fnt_csou, path_tmp)
+    self.fnt_csou = fnt_csou
     return cmd+cmd2+CheckPrevCmdResultCShellScript(cmd2)
 
 

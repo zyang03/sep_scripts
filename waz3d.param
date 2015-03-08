@@ -29,7 +29,7 @@ smooth_rect_sizes=50,30,20
 smooth_rect_reductions=1,1,0
 nrepeat=2
 # The first iter should not change more than +/- 100m/s (in a rms sense) on average.
-initial_perturb_scale=10
+initial_perturb_scale=20
 
 [SectionThree]
 FamilyName: Johnson
