@@ -229,7 +229,7 @@ def RunShellCmd(cmd, print_cmd=False, print_output=False):
   if stat1 != 0:
     assert False, 'Shell cmd Failed: %s!' % out1
   if print_output:
-    print "ShellCmdOutput:", out1
+    print "CmdOutput: %s", out1
   return
 
 def RetrieveAllEqArgs(eq_args_from_cmdline):

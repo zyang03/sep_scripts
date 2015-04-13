@@ -121,10 +121,12 @@ if __name__ == '__main__':
   if not wib.smooth_rects: wib.smooth_rects = smooth_rects_init
   print "Current inversion bookkeeper status: %s" % wib
   # The main inversion loop.
+  forget = true
   for wib.iter in range(iter_beg, niter):
     in_loading_stage = (wib.iter==iter_beg and resume_from_saving_pt)
     # Calc I(v_k) and J_k, and gradient g_k (i.e. fn_dv)
     fn_prefix = "%s/%s-iter%02d" % (path_iter,prefix,wib.iter)
+    fn_prefix_prev = "%s/%s-iter%02d" % (path_iter,prefix,wib.iter-1)
     fn_img = "%s-img.H" % fn_prefix
     eq_args_cmdline['vel'] = wib.fn_v
     eq_args_cmdline['img'] = fn_img
@@ -137,10 +139,9 @@ if __name__ == '__main__':
       batch_mig.Run(sepbase.GenCmdlineArgsFromDict(eq_args_cmdline))
       wib.Save(WeiInversionBookkeeper.IMG_CALC,fn_save)
     fn_dimg = "%s-dimg.H" % fn_prefix
-    fn_bimgh0 = "%s-bimgh0.H" % fn_prefix; fn_imgh0zxy = "%s-imgh0zxy.H" % fn_prefix  # Optionally need this in RMO obj func.
+    fn_bimgh0 = "%s-bimgh0.H" % fn_prefix  # Optionally need this in RMO obj func.
     eq_args_cmdline["dimg"] = fn_dimg
     eq_args_cmdline["bimgh0"] = fn_bimgh0
-    eq_args_cmdline["imgh0zxy"] = fn_imgh0zxy
     if in_loading_stage and wib.resume_stage >= WeiInversionBookkeeper.DIMG_CALC:
       assert pbs_util.CheckSephFileError(fn_dimg) == 0
       assert wib.objfunc != None
@@ -164,12 +165,20 @@ if __name__ == '__main__':
       # Compute search direction s_k from g_k [and s_{i-1}], and apply preconditioning (amplitude scaling and smoothing).
       wib.Save(WeiInversionBookkeeper.GRAD_CALC,fn_save)
     fn_srch = "%s-srch.H" % fn_prefix
-    fn_srch_prev = ""  # Currently just use steepest descent.
+    fn_srch_prev = "%s-srch.H" % fn_prev_prev
+    fn_dv_prev = "%s-dvel.H" % fn_prefix_prev
+    if pbs_util.CheckSephFileError(fn_srch_prev)==0 and pbs_util.CheckSephFileError(fn_dv_prev)==0:
+      forget = false
+    else:
+      forget = true
+      print "!The gradinfo from prev iteration is not present/valid, use steepest descent in this iter. %s, %s" % (fn_srch_prev,fn_dv_prev)
+      fn_srch_prev = ""
+      fn_dv_prev = ""
     if in_loading_stage and wib.resume_stage >= WeiInversionBookkeeper.SRCH_CALC:
       assert pbs_util.CheckSephFileError(fn_srch,False)==0
     else:
-      cmd = ('%s/GenSrchDirFromGradient.x <%s srch_prev=%s >%s out=%s@ rect1=%d rect2=%d rect3=%d nrepeat=%d datapath=%s/' %
-             (dict_args['YANG_BIN'], fn_dv, fn_srch_prev, fn_srch,fn_srch, 
+      cmd = ('%s/GenSrchDirFromGradient.x <%s srch_prev=%s grad_prev=%s >%s out=%s@ rect1=%d rect2=%d rect3=%d nrepeat=%d datapath=%s/' %
+             (dict_args['YANG_BIN'], fn_dv, fn_srch_prev,fn_dv_prev, fn_srch,fn_srch, 
               wib.smooth_rects[0],wib.smooth_rects[1],wib.smooth_rects[2],solver_par.nrepeat, path_iter))
       if fn_gradmask: cmd += ' gradmask=%s ' % fn_gradmask
       sepbase.RunShellCmd(cmd,True,True)
