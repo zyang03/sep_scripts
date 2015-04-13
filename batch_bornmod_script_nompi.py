@@ -35,7 +35,7 @@ def Run(argv):
   pbs_submitter = pbs_util.PbsSubmitter(zip(param_reader.queues, param_reader.queues_cap), param_reader.total_jobs_cap, dict_args['user'])
 
   while True:
-    pbs_submitter.WaitOnAllJobsFinish()
+    pbs_submitter.WaitOnAllJobsFinish(prefix)
     AllFilesComputed = True
     for ish,nsh in zip(ishot_list, nshot_list):  # For each job
       sz_shotrange = "%04d_%04d" % (ish,ish+nsh)

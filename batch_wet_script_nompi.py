@@ -11,7 +11,7 @@ def self_doc():
 # Notice: The final output dvel will always be same size as the input vel, but for each shot, we can shrink the z dimension to save computation.
 
 def Run(argv):
-  print "Run script with params:", argv
+  print "Run WEM_Tomo script with params:", argv
   eq_args_from_cmdline,args = sepbase.parse_args(argv)
   dict_args = sepbase.RetrieveAllEqArgs(eq_args_from_cmdline)
   param_reader = pbs_util.WeiParamReader(dict_args)
@@ -52,7 +52,7 @@ def Run(argv):
   # Main submission loop.
   AllFilesComputed = False
   while not AllFilesComputed:
-    pbs_submitter.WaitOnAllJobsFinish()
+    pbs_submitter.WaitOnAllJobsFinish(prefix)
     AllFilesComputed = True
     fn_output_list_all = []  # Store names of all output files (one for each job)
     for ish,nsh in zip(ishot_list, nshot_list):  # For each job
@@ -108,7 +108,7 @@ def Run(argv):
   scripts.append(pbs_script_creator.CmdCombineMultipleOutputSephFiles(fn_output_list_all, fn_dvel_final, combine_pars,None,param_reader.fn_v3d))
   pbs_script_creator.CreateScriptForNewJob(fn_base_wo_ext)
   pbs_submitter.SubmitJob(pbs_script_creator.AppendScriptsContent(scripts))
-  pbs_submitter.WaitOnAllJobsFinish(fn_base_wo_ext)
+  pbs_submitter.WaitOnAllJobsFinish(prefix+'-'+fn_base_wo_ext)
   # Check if the output is valid.
   file_error = pbs_util.CheckSephFileError(fn_dvel_final,True)
   if file_error == 0:

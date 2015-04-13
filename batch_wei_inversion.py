@@ -25,7 +25,7 @@ def FitParabola(x_coefs, func_vals):
   coef[2] = (x2*x3*(x2-x3)*y1 + x3*x1*(x3-x1)*y2 + x1*x2*(x1-x2)*y3)/denom;
   return coef
 
-def ComputeOptimalStepSize(alpha1,alpha2,costfunc0,costfunc1,costfunc2):
+def ComputeOptimalStepSize(alpha1,alpha2,costfunc0,costfunc1,costfunc2,alpha_max=None):
   '''Given the objectfunction values at 3 trail pts, with 0,alpha1,alpha2 as the stepsize,
   return the optimal stepsize that minimize the cost functions).'''
   stepsizes = [0.,alpha1,alpha2]; costfuncs = [costfunc0,costfunc1,costfunc2]
@@ -52,11 +52,15 @@ def ComputeOptimalStepSize(alpha1,alpha2,costfunc0,costfunc1,costfunc2):
       opt_stepsize = stepsizes[1]*0.25 # Pure heuristic, reduce the stepsize.
     else:
       pass
+  if alpha_max is not None:
+    if opt_stepsize > alpha_max:
+      print "WARN: opt_stepsize (originally %g) capped by alpha_max (%g)" % (opt_stepsize, alpha_max)
+      opt_stepsize = alpha_max
   return opt_stepsize
 
 if __name__ == '__main__':
   eq_args_cmdline,args = sepbase.parse_args(sys.argv[1:])
-  assert args == []
+  assert args == [], "args is not NULL!: %s" % args 
   dict_args = sepbase.RetrieveAllEqArgs(eq_args_cmdline)
   param_reader = pbs_util.ParallelParamReader(dict_args)
   path_tmp = param_reader.path_tmp
@@ -67,6 +71,8 @@ if __name__ == '__main__':
   iter_beg = int(dict_args.get('iter_beg',0))
   str_ws_wnd_wet = dict_args.get('ws_wnd_wet')  # Might use different frequency sampling for tomo operator.
   str_ws_wnd = dict_args.get('ws_wnd')
+  fn_gradmask = dict_args.get('gradmask',None)
+  if fn_gradmask: print "Using gradmask: %s" % (fn_gradmask)
   wemva_type_parser = pbs_util.WemvaTypeParser(dict_args['wemva_type'],True)
   assert 'mode' not in dict_args
   eq_args_cmdline['mode'] = wemva_type_parser.tomo_mode
@@ -75,6 +81,7 @@ if __name__ == '__main__':
   fn_srch = ""; fn_srch_prev = ""
   # Initiate alpha and smoothing scale.
   alpha_init = solver_par.initial_perturb_scale
+  alpha_max = solver_par.max_perturb_scale
   smooth_rects_init = solver_par.smooth_rect_sizes[:]
   # For bookkeeping, load/save from a previous executing point.
   fn_load,fn_save= dict_args['load_save'].split(',')
@@ -94,7 +101,7 @@ if __name__ == '__main__':
     # checking if the inverted velocity file from last time is recorded.
     iter_beg_old = iter_beg
     for iter in range(niter-1, iter_beg_old-1, -1):  # From [niter-1 to iter_beg], see if we have fn_vn name in place.
-      fn_prefix = "%s/iter%02d" % (path_iter,iter)
+      fn_prefix = "%s/%s-iter%02d" % (prefix,path_iter,iter)
       fn_vn = "%s-velnew.H" % fn_prefix
       if pbs_util.CheckSephFileError(fn_vn,False)==0:
         iter_beg = iter+1  # Starting from this new iteration number.
@@ -117,7 +124,7 @@ if __name__ == '__main__':
   for wib.iter in range(iter_beg, niter):
     in_loading_stage = (wib.iter==iter_beg and resume_from_saving_pt)
     # Calc I(v_k) and J_k, and gradient g_k (i.e. fn_dv)
-    fn_prefix = "%s/iter%02d" % (path_iter,wib.iter)
+    fn_prefix = "%s/%s-iter%02d" % (path_iter,prefix,wib.iter)
     fn_img = "%s-img.H" % fn_prefix
     eq_args_cmdline['vel'] = wib.fn_v
     eq_args_cmdline['img'] = fn_img
@@ -161,10 +168,11 @@ if __name__ == '__main__':
     if in_loading_stage and wib.resume_stage >= WeiInversionBookkeeper.SRCH_CALC:
       assert pbs_util.CheckSephFileError(fn_srch,False)==0
     else:
-      cmd = ('%s/GenSrchDirFromGradient.x <%s srch_prev=%s >%s rect1=%d rect2=%d rect3=%d datapath=%s/' %
-             (dict_args['YANG_BIN'], fn_dv, fn_srch_prev, fn_srch, 
-              wib.smooth_rects[0],wib.smooth_rects[1],wib.smooth_rects[2], path_iter))
-      sepbase.RunShellCmd(cmd,True)
+      cmd = ('%s/GenSrchDirFromGradient.x <%s srch_prev=%s >%s out=%s@ rect1=%d rect2=%d rect3=%d nrepeat=%d datapath=%s/' %
+             (dict_args['YANG_BIN'], fn_dv, fn_srch_prev, fn_srch,fn_srch, 
+              wib.smooth_rects[0],wib.smooth_rects[1],wib.smooth_rects[2],solver_par.nrepeat, path_iter))
+      if fn_gradmask: cmd += ' gradmask=%s ' % fn_gradmask
+      sepbase.RunShellCmd(cmd,True,True)
       # Make sure the expected output file is generated.
       assert pbs_util.CheckSephFileError(fn_srch,True)==0
       # Adjust the smooth scale after each iteration
@@ -176,13 +184,15 @@ if __name__ == '__main__':
     # stepsizes are alpha1,alpha2
     fn_v1 = "%s-vel1.H" % fn_prefix; fn_v2 = "%s-vel2.H" % fn_prefix
     alpha1 = wib.alpha; alpha2 = 2*alpha1
+    assert alpha1 <= alpha_max*1.01, "Sanity Check, step size alpha2(%g) is too large (max=%g)" % (alpha2,alpha_max)
     if in_loading_stage and wib.resume_stage >= WeiInversionBookkeeper.VEL12_CALC:
       assert pbs_util.CheckSephFileError(fn_v1,False)==0
       assert pbs_util.CheckSephFileError(fn_v2,False)==0
     else:
       cmd = ('%s/GenTrialModelFromSrchDir.x <%s srch=%s stepsize=%f,%f vmax=%g vmin=%g output=%s,%s datapath=%s/ ' % 
            (dict_args['YANG_BIN'], wib.fn_v,fn_srch,alpha1,alpha2,solver_par.maxval,solver_par.minval, fn_v1,fn_v2, path_iter))
-      sepbase.RunShellCmd(cmd,True)
+      if fn_gradmask: cmd += ' gradmask=%s ' % fn_gradmask
+      sepbase.RunShellCmd(cmd,True,True)
       assert pbs_util.CheckSephFileError(fn_v1,False)==0
       assert pbs_util.CheckSephFileError(fn_v2,False)==0
       wib.Save(WeiInversionBookkeeper.VEL12_CALC,fn_save)
@@ -218,15 +228,16 @@ if __name__ == '__main__':
       assert pbs_util.CheckSephFileError(fn_vn,True)==0
     else:
       # Compute step-length alpha based on objfunc[,1,2]
-      wib.alpha = ComputeOptimalStepSize(alpha1,alpha2,wib.objfunc,wib.objfunc1,wib.objfunc2)
+      wib.alpha = ComputeOptimalStepSize(alpha1,alpha2,wib.objfunc,wib.objfunc1,wib.objfunc2,alpha_max)
       objfuncs3 = [wib.objfunc, wib.objfunc1, wib.objfunc2]
       wib.objfuncs.extend(objfuncs3)
-      print "objfuncs for current iter: ", objfuncs3, [alpha1,alpha2,wib.alpha]
+      print "objfuncs for current iter: [%g,%g,%g], " % (objfuncs3[0],objfuncs3[1],objfuncs3[2]), "steps=%s" % ([alpha1,alpha2,wib.alpha])
       wib.stepsizes.append(wib.alpha);
       # Compute the updated vel model, the filename is written to fn_v
       cmd = ('%s/GenTrialModelFromSrchDir.x <%s srch=%s stepsize=%f vmax=%g vmin=%g output=%s datapath=%s/' %
              (dict_args['YANG_BIN'], wib.fn_v,fn_srch,wib.alpha, solver_par.maxval,solver_par.minval, fn_vn, path_iter))
-      sepbase.RunShellCmd(cmd, True);
+      if fn_gradmask: cmd += ' gradmask=%s ' % fn_gradmask
+      sepbase.RunShellCmd(cmd, True,True);
       assert pbs_util.CheckSephFileError(fn_vn,True)==0
       # Write the alpha and objfuncs history to fn_vn
       fp = open(fn_vn,'a');

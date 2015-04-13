@@ -222,12 +222,14 @@ def ParseBooleanString(val_str):
 
 import ConfigParser
 
-def RunShellCmd(cmd, print_cmd=False):
+def RunShellCmd(cmd, print_cmd=False, print_output=False):
   if print_cmd:
     print "RunShellCmd: %s" % cmd
   stat1,out1=commands.getstatusoutput(cmd)
   if stat1 != 0:
     assert False, 'Shell cmd Failed: %s!' % out1
+  if print_output:
+    print "ShellCmdOutput:", out1
   return
 
 def RetrieveAllEqArgs(eq_args_from_cmdline):

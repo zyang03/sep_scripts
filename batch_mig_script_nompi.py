@@ -11,12 +11,13 @@ import sepbase
 #             *.py ... ish_beglist=? ...
 
 def Run(argv):
-  print "Run script with params:", argv
+  print "Run Migration script with params:", argv
   eq_args_from_cmdline,args = sepbase.parse_args(argv)
   dict_args = sepbase.RetrieveAllEqArgs(eq_args_from_cmdline)
   param_reader = pbs_util.WeiParamReader(dict_args)
   prefix = dict_args['prefix']
   fn_imgh_final  = os.path.abspath(dict_args['img'])
+  # print "IMG_PAR=%s" % dict_args['IMG_PAR']
   datapath_final, fn_imgh_final_basename = os.path.split(fn_imgh_final)
   fn_base_wo_ext = os.path.splitext(fn_imgh_final_basename)[0]
   N = param_reader.nfiles
@@ -44,7 +45,7 @@ def Run(argv):
   # Main submission loop.
   AllFilesComputed = False
   while not AllFilesComputed:
-    pbs_submitter.WaitOnAllJobsFinish()
+    pbs_submitter.WaitOnAllJobsFinish(prefix)
     AllFilesComputed = True
     fn_imgh_list_all = []
     for ish,nsh in zip(ishot_list, nshot_list):  # For each job
@@ -100,9 +101,9 @@ def Run(argv):
     combine_pars = "oe3=%g,%g oe4=%g,%g ndim=5" % (xmin_cmdl,xmax_cmdl,ymin_cmdl,ymax_cmdl)
   scripts.append(pbs_script_creator.CmdCombineMultipleOutputSephFiles(
       fn_imgh_list_all, fn_imgh_final, combine_pars, datapath_final))
-  pbs_script_creator.CreateScriptForNewJob("%s" % fn_base_wo_ext)
+  pbs_script_creator.CreateScriptForNewJob(fn_base_wo_ext)
   pbs_submitter.SubmitJob(pbs_script_creator.AppendScriptsContent(scripts))
-  pbs_submitter.WaitOnAllJobsFinish()
+  pbs_submitter.WaitOnAllJobsFinish(prefix+'-'+fn_base_wo_ext)
   return
 
 

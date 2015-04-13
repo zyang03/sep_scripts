@@ -70,7 +70,7 @@ def Run(argv):
     scripts.append(cmd3+CheckPrevCmdResultCShellScript(cmd3)); scripts.append(cmd4+CheckPrevCmdResultCShellScript(cmd4))
     scripts.append(pbs_script_creator.CmdFinalCleanUpTempDir())
     pbs_submitter.SubmitJob(pbs_script_creator.AppendScriptsContent(scripts))
-    pbs_submitter.WaitOnAllJobsFinish(job_identifier)
+    pbs_submitter.WaitOnAllJobsFinish(prefix+'-'+job_identifier)
     # Now the angle gather image is ready, put back the correct axis dimensions.
     sepbase.put_sep_axis_params(fn_img_out,1,ax_z)
     sepbase.put_sep_axis_params(fn_img_out,4,ax_x)
@@ -106,7 +106,7 @@ def Run(argv):
     scripts.append(cmd3+CheckPrevCmdResultCShellScript(cmd3)); scripts.append(cmd4+CheckPrevCmdResultCShellScript(cmd4))
     scripts.append(pbs_script_creator.CmdFinalCleanUpTempDir())
     pbs_submitter.SubmitJob(pbs_script_creator.AppendScriptsContent(scripts))
-    pbs_submitter.WaitOnAllJobsFinish(job_identifier)
+    pbs_submitter.WaitOnAllJobsFinish(prefix+'-'+job_identifier)
     print "put right axis into fn_img_off_out: %s " % fn_img_out
     # Now the off gather image is ready, put back the correct axis dimensions.
     sepbase.put_sep_axis_params(fn_img_out,3,ax_x)

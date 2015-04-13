@@ -138,9 +138,9 @@ class JobParamReader:
     nqueue = len(self.queues)
     if self.queues_cap:  # Not None
       self.queues_cap = map(int, self.queues_cap.split(','))
-      assert len(queues_cap) == nqueue, 'queues and queues_cap have different num_of_elements!'
+      assert len(self.queues_cap) == nqueue, 'queues and queues_cap have different num_of_elements!'
     else:  # Provide default values.
-      self.queues_cap = [5]*nqueue
+      self.queues_cap = [3]*nqueue
     self.prefix = dict_args['prefix']  # The prefix used for generating filenames for intermediate/output datafiles.
     # The cap of total number of jobs in *each* queue at any given time.
     self.total_jobs_cap = dict_args.get('total_jobs_cap')
@@ -204,6 +204,7 @@ class PbsScriptCreator:
   def AppendScriptsContent(self, scripts):
     '''Append the list of lines in 'scripts' to the underlying script file.
     Returns the script file name.'''
+    prefix = self.param_reader.prefix
     if self._starting_new_script:  # Create the new script
       self._starting_new_script = False
       fname_template_script = self.param_reader.fname_template_script
@@ -215,8 +216,8 @@ class PbsScriptCreator:
                 (nnodes, self.fn_script))
         sepbase.RunShellCmd(cmd1)
       # Change jobname for better readability.
-      cmd0 = "sed -i '/#PBS -N/c\#PBS -N %s' %s" % (
-          self._job_filename_stem, self.fn_script)
+      cmd0 = "sed -i '/#PBS -N/c\#PBS -N %s-%s' %s" % (
+          prefix, self._job_filename_stem, self.fn_script)
       # Redirect PBS output, change the entire PBS -o and -e line
       cmd1 = "sed -i '/#PBS -o/c\#PBS -o %s' %s" % (
           self.fn_log, self.fn_script)
@@ -344,8 +345,8 @@ class WeiScriptor:
     prefix = self.param_reader.prefix
     self.fnt_imgh = '%s/imgh-%s-%04d.H' % (path_tmp,prefix,ish)
     self.fnt_output_list.append(self.fnt_imgh)
-    cmd1 = "time %s/bwi-wem3d-Zh.x %s %s mode=imgadj crec=%s csou=%s bimg=%s bvel=%s datapath=%s/ " % (
-        self.dict_args['TANG_BIN'], self.dict_args['MIG_PAR_WAZ3D'], self.dict_args['SS_OFFSET_PAR'], self.fnt_crec, self.fnt_csou, self.fnt_imgh,self.fnt_bvel, path_tmp)
+    cmd1 = "time %s/bwi-wem3d-Zh.x %s %s %s mode=imgadj crec=%s csou=%s bimg=%s bvel=%s datapath=%s/ " % (
+        self.dict_args['TANG_BIN'], self.dict_args['MIG_PAR_WAZ3D'], self.dict_args.get('IMG_PAR',""),self.dict_args['SS_OFFSET_PAR'], self.fnt_crec, self.fnt_csou, self.fnt_imgh,self.fnt_bvel, path_tmp)
     xmin, xmax = image_domains[0:2]
     ymin, ymax = image_domains[2:4]
     zmin, zmax = image_domains[4:6]
@@ -453,7 +454,6 @@ class WeiScriptor:
 
 class PbsSubmitter:
   """Implements a greedy job submission strategy."""
-
   def __init__(self, queues_info=[('default',1)], total_jobs_cap=None, user=None):
     """
     Args:
@@ -572,18 +572,35 @@ def UnionRectangle(rect1, rect2):
 
 class WemvaTypeParser:
   def __init__(self, wemva_type, calc_dimg):
+    '''Columns meaning:
+        col 0: calc_o2a if calc_dimg==False
+        col 1: calc_o2a if calc_dimg==True
+        col 2: calc_a2o if calc_dimg==True
+    '''
     self._map_wemva_type_calc_ang = {
-        "1" : (False, False), # Stack Power
-        "11": (False, True),  # RMO
-        "61": (False, False), # DSO
-        "62": (False, False)
+        "1" : (False, False, False), # Stack Power
+        "2" : (False, False, False), # Stack Power
+        "3" : (True, True, False), # Stack Power
+        "11": (False, True, True),  # RMO
+        "12": (False, True, True),  # RMO
+        "13": (True, True, True),  # RMO
+        "61": (False, False,False), # DSO
+        "62": (False, False,False),
+        "63": (False, False,False),
+        "64": (True, True,False),
     }
     if not calc_dimg:
       self.calc_ang_gather = self._map_wemva_type_calc_ang[wemva_type][0]
+      self.calc_a2o = False
+      if self.calc_ang_gather:  # sanity check
+        assert self._map_wemva_type_calc_ang[wemva_type][1]
     else:
       self.calc_ang_gather = self._map_wemva_type_calc_ang[wemva_type][1]
+      self.calc_a2o = self._map_wemva_type_calc_ang[wemva_type][2]
+    # Some sanity check
+    if self.calc_a2o: assert self.calc_ang_gather
     self.tomo_mode = "tomadj"
-    if wemva_type == "11":
+    if wemva_type in ["11","12","13"]:
       self.tomo_mode = "tomimit"
     return
 
@@ -601,6 +618,7 @@ class SolverParamReader:
     self.nrepeat = int(dict_args.get('nrepeat',1))
     # 'initial_perturb_scale' determines the starting stepsize the inversion will choose to generate trial models, i.e. the starting delta_m = initial_perturb_scale*normalized_grad. Assuming normalized_grad has a RMS of 1.0
     self.initial_perturb_scale = float(dict_args['initial_perturb_scale'])
+    self.max_perturb_scale = float(dict_args['max_perturb_scale'])
 
 
 class WeiInversionBookkeeper:

@@ -1,6 +1,7 @@
 #!/usr/bin/python
 import commands
 import sys,re,os,string
+import pbs_util
 import sepbase
 
 def self_doc():
@@ -38,6 +39,9 @@ if __name__ == '__main__':
   lines_output = []
   file_cnt = 0
   for file in shot_files:
+    # First check the shot file is valid
+    fe = pbs_util.CheckSephFileError(file, check_binary=True)
+    assert fe == 0, "file %s is invalid: %d!" % (file, fe)
     if path is None:
       file_name_full = os.path.abspath(file)
     else:

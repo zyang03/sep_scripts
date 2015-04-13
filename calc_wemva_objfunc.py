@@ -16,17 +16,18 @@ import sepbase
 
 def Run(argv):
   '''Return the value of objective function calcualted.'''
-  print "Run calc_wemva_objfunc.py script with params:", " ".join(argv)
+  print "Run calc_wemva_objfunc script with params:", " ".join(argv)
   eq_args_from_cmdline,args = sepbase.parse_args(argv)
   dict_args = sepbase.RetrieveAllEqArgs(eq_args_from_cmdline)
   param_reader = pbs_util.JobParamReader(dict_args)
   prefix = param_reader.prefix
-  path_out = param_reader.path_out
   path_tmp = param_reader.path_tmp
   # Get the input image file.
   fn_img = os.path.abspath(dict_args['img'])
   # string fn_img_base_wo_ext serves as a single unique identifier.
   fn_img_path, fn_img_base_wo_ext, _ = pbs_util.SplitFullFilePath(fn_img)
+  #path_out = param_reader.path_out
+  path_out = fn_img_path
   # check if need to compute image perturbation.
   calc_dimg = False
   fn_dimg = dict_args.get('dimg')
@@ -34,11 +35,13 @@ def Run(argv):
     calc_dimg = True
     fn_dimg = os.path.abspath(fn_dimg)
     fn_dimg_path, fn_dimg_base_wo_ext, _ = pbs_util.SplitFullFilePath(fn_dimg)
+    fn_dimg_ang = "%s/%s-ang.H" % (fn_dimg_path, fn_dimg_base_wo_ext)
   b3D = dict_args['b3D']
   wemva_type = dict_args['wemva_type']
   # Check if need to compute angle gather
   wemva_parser = pbs_util.WemvaTypeParser(wemva_type,calc_dimg)
   calc_ang_gather = wemva_parser.calc_ang_gather
+  calc_a2o = wemva_parser.calc_a2o
   # Initialize script_creators and PbsSubmitter.
   pbs_script_creator = pbs_util.PbsScriptCreator(param_reader)
   assert param_reader.queues[0] != 'default'  # Put sep queue ahead of the default queue.
@@ -54,7 +57,6 @@ def Run(argv):
     imgh0_path, imgh0_base, _ = pbs_util.SplitFullFilePath(fn_imgh0_hxyxyz)
     fn_imgh0_zxy = "%s/%s-zxy.H" % (imgh0_path, imgh0_base)
     fn_img_ang = "%s/%s-ang.H" % (fn_img_path, fn_img_base_wo_ext)
-    fn_dimg_ang = "%s/%s-ang.H" % (fn_dimg_path, fn_dimg_base_wo_ext)
     fn_rmoplot_img = "%s/%s-ang-rmo.H" % (fn_img_path, fn_img_base_wo_ext)
     while True:
       # Check if the output file is already in place.
@@ -73,7 +75,7 @@ def Run(argv):
         off2ang3d.Run(sepbase.GenCmdlineArgsFromDict(eq_args_from_cmdline_cp))
   # Start computing the objective functions.
   if calc_dimg:
-    if calc_ang_gather: fnt_dimg_out = fn_dimg_ang
+    if calc_a2o: fnt_dimg_out = fn_dimg_ang
     else: fnt_dimg_out = fn_dimg
   while True:
     job_identifier = 'objf-'+fn_img_base_wo_ext
@@ -106,18 +108,19 @@ def Run(argv):
             pass
     # Compute the obj func and dimg
     scripts = []
-    cmd = 'time %s/CalcWemvaObjFunc.x par=%s img=%s b3D=%s wemva_type=%s datapath=%s/' % (dict_args['YANG_BIN'], dict_args['fn_wemva_objfunc_par'], fn_img, b3D, wemva_type, path_out)
+    fn_costcube = "%s/%s-costcube.H" % (fn_img_path, fn_img_base_wo_ext)
+    cmd = 'time %s/CalcWemvaObjFunc.x par=%s img=%s b3D=%s wemva_type=%s datapath=%s/ cost_cube.H=%s' % (dict_args['YANG_BIN'], dict_args['fn_wemva_objfunc_par'], fn_img, b3D, wemva_type, path_out, fn_costcube)
     if calc_ang_gather:
       cmd += ' ang_img=%s imgh0_zxy=%s rmo.H=%s ' % (fn_img_ang, fn_imgh0_zxy, fn_rmoplot_img)
     if calc_dimg: cmd += ' dimg=%s '%fnt_dimg_out
     scripts.append(cmd+pbs_util.CheckPrevCmdResultCShellScript(cmd)+'\n')
     scripts.append(pbs_script_creator.CmdFinalCleanUpTempDir())
     pbs_submitter.SubmitJob(pbs_script_creator.AppendScriptsContent(scripts))
-    pbs_submitter.WaitOnAllJobsFinish(job_identifier)
+    pbs_submitter.WaitOnAllJobsFinish(prefix+'-'+job_identifier)
   # end for while
   print 'ObjFuncValue=%g' % obj_func_value
   # See if needs to convert dimg-ang back to dimg-off.
-  if calc_ang_gather and calc_dimg:
+  if calc_a2o and calc_dimg:
     assert fnt_dimg_out == fn_dimg_ang
     while True:
       file_error = pbs_util.CheckSephFileError(fn_dimg,False)
