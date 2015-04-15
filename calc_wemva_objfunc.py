@@ -55,7 +55,7 @@ def Run(argv):
   if calc_ang_gather:  # Need to compute angle gather first.
     fn_imgh0_hxyxyz = os.path.abspath(dict_args['bimgh0'])
     imgh0_path, imgh0_base, _ = pbs_util.SplitFullFilePath(fn_imgh0_hxyxyz)
-    fn_imgh0_zxy = "%s/%s-zxy.H" % (imgh0_path, imgh0_base)
+    fn_imgh0_zxy = "%s/%s-h0zxy.H" % (imgh0_path, imgh0_base)
     fn_img_ang = "%s/%s-ang.H" % (fn_img_path, fn_img_base_wo_ext)
     fn_rmoplot_img = "%s/%s-ang-rmo.H" % (fn_img_path, fn_img_base_wo_ext)
     while True:
@@ -65,8 +65,8 @@ def Run(argv):
         print "The image gather file is good, skip: %s " % fn_img_ang
         break
       else:  # Compute the angle gather
-        cmd1 = "time Window3d <%s n1=1 n2=1 min1=0 min2=0 squeeze=n >%s datapath=%s/ " % (fn_img, fn_imgh0_hxyxyz, imgh0_path)
-        cmd2 = "time %s/YReorder <%s reshape=2,4,5 mapping=3,2,1 >%s datapath=%s/ " % (dict_args['YANG_BIN'], fn_imgh0_hxyxyz, fn_imgh0_zxy,imgh0_path)
+        cmd1 = "time Window3d <%s n1=1 n2=1 min1=0 min2=0 squeeze=n >%s datapath=%s/ " % (fn_img, fn_imgh0_hxyxyz, fn_img_path)
+        cmd2 = "time %s/YReorder <%s reshape=2,4,5 mapping=3,2,1 >%s datapath=%s/ " % (dict_args['YANG_BIN'], fn_imgh0_hxyxyz, fn_imgh0_zxy,fn_img_path)
         sepbase.RunShellCmd(cmd1); sepbase.RunShellCmd(cmd2)
         eq_args_from_cmdline_cp = eq_args_from_cmdline.copy()
         eq_args_from_cmdline_cp['img'] = fn_img

@@ -121,7 +121,7 @@ if __name__ == '__main__':
   if not wib.smooth_rects: wib.smooth_rects = smooth_rects_init
   print "Current inversion bookkeeper status: %s" % wib
   # The main inversion loop.
-  forget = true
+  forget = True
   for wib.iter in range(iter_beg, niter):
     in_loading_stage = (wib.iter==iter_beg and resume_from_saving_pt)
     # Calc I(v_k) and J_k, and gradient g_k (i.e. fn_dv)
@@ -139,7 +139,7 @@ if __name__ == '__main__':
       batch_mig.Run(sepbase.GenCmdlineArgsFromDict(eq_args_cmdline))
       wib.Save(WeiInversionBookkeeper.IMG_CALC,fn_save)
     fn_dimg = "%s-dimg.H" % fn_prefix
-    fn_bimgh0 = "%s-bimgh0.H" % fn_prefix  # Optionally need this in RMO obj func.
+    fn_bimgh0 = "%s-img-bimgh0.H" % fn_prefix  # Optionally need this in RMO obj func.
     eq_args_cmdline["dimg"] = fn_dimg
     eq_args_cmdline["bimgh0"] = fn_bimgh0
     if in_loading_stage and wib.resume_stage >= WeiInversionBookkeeper.DIMG_CALC:
@@ -165,12 +165,12 @@ if __name__ == '__main__':
       # Compute search direction s_k from g_k [and s_{i-1}], and apply preconditioning (amplitude scaling and smoothing).
       wib.Save(WeiInversionBookkeeper.GRAD_CALC,fn_save)
     fn_srch = "%s-srch.H" % fn_prefix
-    fn_srch_prev = "%s-srch.H" % fn_prev_prev
+    fn_srch_prev = "%s-srch.H" % fn_prefix_prev
     fn_dv_prev = "%s-dvel.H" % fn_prefix_prev
     if pbs_util.CheckSephFileError(fn_srch_prev)==0 and pbs_util.CheckSephFileError(fn_dv_prev)==0:
-      forget = false
+      forget = False
     else:
-      forget = true
+      forget = True
       print "!The gradinfo from prev iteration is not present/valid, use steepest descent in this iter. %s, %s" % (fn_srch_prev,fn_dv_prev)
       fn_srch_prev = ""
       fn_dv_prev = ""
@@ -215,6 +215,8 @@ if __name__ == '__main__':
       eq_args_cmdline["vel"] = fn_v1; eq_args_cmdline["img"] = fn_img1
       batch_mig.Run(sepbase.GenCmdlineArgsFromDict(eq_args_cmdline))
       wib.Save(WeiInversionBookkeeper.IMG1_CALC,fn_save)
+    fn_bimgh0 = "%s-img1-bimgh0.H" % fn_prefix  # Optionally need this in RMO obj func.
+    eq_args_cmdline["bimgh0"] = fn_bimgh0
     if in_loading_stage and wib.resume_stage >= WeiInversionBookkeeper.OBJ1_CALC:
       assert wib.objfunc1 != None
     else:
@@ -226,6 +228,8 @@ if __name__ == '__main__':
       eq_args_cmdline["vel"] = fn_v2; eq_args_cmdline["img"] = fn_img2
       batch_mig.Run(sepbase.GenCmdlineArgsFromDict(eq_args_cmdline))
       wib.Save(WeiInversionBookkeeper.IMG2_CALC,fn_save)
+    fn_bimgh0 = "%s-img2-bimgh0.H" % fn_prefix  # Optionally need this in RMO obj func.
+    eq_args_cmdline["bimgh0"] = fn_bimgh0
     if in_loading_stage and wib.resume_stage >= WeiInversionBookkeeper.OBJ2_CALC:
       assert wib.objfunc2 != None
     else:
