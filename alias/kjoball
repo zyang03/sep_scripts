@@ -5,7 +5,21 @@ import os
 
 ## This program implements the following aliases
 #alias kjoball "qstat | grep zyang03 | gawk '{print $1}' | xargs qdel"
-cmd1 = "qstat | grep zyang03 | gawk \'{print $1}\' | xargs qdel"
-print cmd1
-os.system(cmd1)
+prefix = None
+if len(sys.argv) >= 2:
+  prefix = sys.argv[1]
+if prefix is None:
+  cmd1 = "qstat -a | grep zyang03 | gawk \'{print $1}\' | xargs qdel"
+  print cmd1
+else:
+  cmd1 = "qstat -a | grep zyang03 | grep %s | gawk \'{print $1}\' " % prefix
+  stat1,out1=commands.getstatusoutput(cmd1)
+  # extract the list of outputs
+  jobns = []
+  for line in out1.split('\n'):
+    jobns.append(line.split('.')[0])
+  cmd2 = "qdel %s" % " ".join(jobns)
+  print cmd2
+  os.system(cmd2)
+#os.system(cmd1)
 

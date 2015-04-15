@@ -140,7 +140,7 @@ class JobParamReader:
       self.queues_cap = map(int, self.queues_cap.split(','))
       assert len(self.queues_cap) == nqueue, 'queues and queues_cap have different num_of_elements!'
     else:  # Provide default values.
-      self.queues_cap = [3]*nqueue
+      self.queues_cap = [15]*nqueue
     self.prefix = dict_args['prefix']  # The prefix used for generating filenames for intermediate/output datafiles.
     # The cap of total number of jobs in *each* queue at any given time.
     self.total_jobs_cap = dict_args.get('total_jobs_cap')
@@ -486,13 +486,14 @@ class PbsSubmitter:
       # Exclude the error jobs (' C ') coz these jobs can remain in qstat info for quite some time.
       if not grep_pattern:
         cmd = "qstat -a | grep -v \' C \' | grep %s | wc -l " % (self._user_name)
+        grep_pattern = ""
       else:
         # Due to the column width constrain from qstat display, only maximum of 15 chars in grep_pattern(job name basically) will be shown.
         cmd = "qstat -a | grep -v \' C \' | grep %s | grep %s | wc -l " % (self._user_name, grep_pattern[0:15])
       stat1,out1=commands.getstatusoutput(cmd)
       if int(out1) > 0:
         icnt += 1
-        if icnt == 1: print "Wait On All Jobs to Finish..."
+        if icnt == 1: print "Wait On All Jobs to Finish (%s)..." % grep_pattern[0:15]
         time.sleep(5)
       else:
         break
