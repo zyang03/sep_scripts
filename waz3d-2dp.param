@@ -1,0 +1,46 @@
+# For roi2 dp model inversion and modeling
+
+[OnewayWet]
+# Params for oneway Wave-equation tomography code by Tang.
+TANG_BIN=  /data/sep/zyang03/other/yaxun_weo/bin
+YANG_BIN=  /data/sep/zyang03/bin
+#MIG_PAR_WAZ3D_PT=  pdip=65 oper=ssfpi nvrf=4 nws=100 nxpad_beg=25 nxpad_end=25 nypad_beg=25 nypad_end=25 ntpx=25 ntpy=25 memchk=n comsou=n offset=y
+
+# Plane-wave, target region only.
+source_type= plane
+
+MIG_PAR_WAZ3D=  pdip=65 oper=ssfpi nvrf=4 nws=88 nxpad_beg=15 nxpad_end=15 nypad_beg=15 nypad_end=15 ntpx=15 ntpy=15 memchk=n report=y comsou=y offset=n
+IMG_PAR= image_dx=50 image_dy=60
+# overwrite nws in MIG_PAR_WAZ3D
+WET_PAR= nws=44  
+
+#SS_OFFSET_PAR=  nhx=21 dhx=50 ohx=-500 nhy=19 dhy=60 ohy=-540
+#SS_OFFSET_PAR=  nhx=19 dhx=50 ohx=-450 nhy=17 dhy=60 ohy=-480
+SS_OFFSET_PAR=  nhx=13 dhx=75 ohx=-450 nhy=13 dhy=90 ohy=-540
+# For test
+SS_OFFSET_PAR__=  nhx=5 dhx=50 ohx=-100 nhy=3 dhy=60 ohy=-60
+# SS_OFFSET_PAR=  nhx=1 dhx=50 ohx=0 nhy=1 dhy=60 ohy=0
+# For test
+#ANG_PAR=  oang=-55 nang=45 dang=2.5 niter_stomp=4 niter_lin=9
+HESS_PAR=  comsou=n grecin=y hestyp=2 rdmtype=2 offset=y
+#GEOM_GXY= ngx=273 dgx=25 ogx=17500  ngy=175 dgy=30 ogy=-6210
+GEOM_GXY= ngx=380 dgx=25 ogx=16000 ngy=217 dgy=30 ogy=-6210
+
+[Angle gathers]
+# fn_off2ang_par= 
+
+[Solver Vel Inversion]
+minval= 2400
+maxval= 3800
+#smooth_rect_sizes=10,8,4
+#smooth_rect_reductions=2,2,1
+smooth_rect_sizes=50,40,20 
+smooth_rect_reductions=3,3,1
+nrepeat=2
+# The first iter should not change more than +/- 100m/s (in a rms sense) on average.
+initial_perturb_scale=30
+max_perturb_scale=100
+
+[Examples]
+FamilyName: Johnson
+
