@@ -475,7 +475,7 @@ class PbsSubmitter:
     else:
       self._user_name = user
     if total_jobs_cap is None:
-      self._total_jobs_cap = [60]*nq  # Can have at most 60 jobs on the cluster.
+      self._total_jobs_cap = [100]*nq  # Can have at most 100 jobs on the cluster.
     else:
       assert nq == len(total_jobs_cap)
       self._total_jobs_cap = total_jobs_cap[:]
