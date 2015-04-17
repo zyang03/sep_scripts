@@ -289,6 +289,8 @@ class WeiScriptor:
   def __init__(self, param_reader):
     self.param_reader = param_reader
     self.dict_args = param_reader.dict_args
+    if 'WET_PAR' not in self.dict_args:
+      self.dict_args['WET_PAR'] = ''
     self.sz_shotrange = None
 
   def NewJob(self, sz_shotrange):
@@ -307,8 +309,8 @@ class WeiScriptor:
     prefix = self.param_reader.prefix
     self.fnt_output = '%s/dvel-%s-%04d.H' % (path_tmp,prefix,ish)
     self.fnt_output_list.append(self.fnt_output)
-    cmd1 = "time %s/bwi-wet3d-Zh.x %s mode=tomadj crec=%s csou=%s dimg=%s bvel=%s dvel=%s datapath=%s/" % (
-        self.dict_args['TANG_BIN'], self.dict_args['MIG_PAR_WAZ3D'], self.fnt_crec, self.fnt_csou, self.fnt_dimg,self.fnt_bvel,self.fnt_output, path_tmp)
+    cmd1 = "time %s/bwi-wet3d-Zh.x %s %s mode=tomadj crec=%s csou=%s dimg=%s bvel=%s dvel=%s datapath=%s/" % (
+        self.dict_args['TANG_BIN'], self.dict_args['MIG_PAR_WAZ3D'], self.dict_args['WET_PAR'], self.fnt_crec, self.fnt_csou, self.fnt_dimg,self.fnt_bvel,self.fnt_output, path_tmp)
     # The output dimension will always be the same as the input vel model.
     return cmd + cmd1+CheckPrevCmdResultCShellScript(cmd1)
 
@@ -323,8 +325,8 @@ class WeiScriptor:
     wem_bin_path = self.dict_args['TANG_BIN']
     final_cmd = cmd
     if True:  # Do the cost-saving way
-      cmd1 = "time %s/bwi-wet3d-Zh.x %s mode=tomimit csou=%s dimg=%s bimgh0=%s bvel=%s dvel=%s datapath=%s/" % (
-          wem_bin_path,self.dict_args['MIG_PAR_WAZ3D'], self.fnt_csou,self.fnt_dimg,self.fnt_bimgh0,self.fnt_bvel,self.fnt_output, path_tmp)
+      cmd1 = "time %s/bwi-wet3d-Zh.x %s %s mode=tomimit csou=%s dimg=%s bimgh0=%s bvel=%s dvel=%s datapath=%s/" % (
+          wem_bin_path,self.dict_args['MIG_PAR_WAZ3D'],self.dict_args['WET_PAR'], self.fnt_csou,self.fnt_dimg,self.fnt_bimgh0,self.fnt_bvel,self.fnt_output, path_tmp)
     # The output dimension will always be the same as the input vel model.
       final_cmd += cmd1+CheckPrevCmdResultCShellScript(cmd1)
     else :  # Do the more expensive way
@@ -332,8 +334,8 @@ class WeiScriptor:
       cmd1 = "time %s/bwi-wem3d-Zh.x %s %s mode=imgfwd crec=%s csou=%s bimg=%s bvel=%s datapath=%s/" % (
           wem_bin_path, self.dict_args['MIG_PAR_WAZ3D'], self.dict_args['GEOM_GXY'], self.fnt_h0_crec, self.fnt_csou, self.fnt_bimgh0,self.fnt_bvel, path_tmp)
       final_cmd += cmd1+CheckPrevCmdResultCShellScript(cmd1)
-      cmd2 = "time %s/bwi-wet3d-Zh.x %s mode=tomadj csou=%s dimg=%s crec=%s bvel=%s dvel=%s datapath=%s/" % (
-          wem_bin_path,self.dict_args['MIG_PAR_WAZ3D'], self.fnt_csou,self.fnt_dimg,self.fnt_h0_crec,self.fnt_bvel,self.fnt_output, path_tmp)
+      cmd2 = "time %s/bwi-wet3d-Zh.x %s %s mode=tomadj csou=%s dimg=%s crec=%s bvel=%s dvel=%s datapath=%s/" % (
+          wem_bin_path,self.dict_args['MIG_PAR_WAZ3D'],self.dict_args['WET_PAR'], self.fnt_csou,self.fnt_dimg,self.fnt_h0_crec,self.fnt_bvel,self.fnt_output, path_tmp)
       final_cmd += cmd2+CheckPrevCmdResultCShellScript(cmd2)
     return final_cmd
 
@@ -454,7 +456,7 @@ class WeiScriptor:
 
 class PbsSubmitter:
   """Implements a greedy job submission strategy."""
-  def __init__(self, queues_info=[('default',1)], total_jobs_cap=None, user=None):
+  def __init__(self, queues_info=[('default',1)], total_jobs_cap=None, user=None, priority_num_Q_jobs=None):
     """
     Args:
       queues_info: A list of queue names, ordered by the priorities(descending). 
@@ -463,6 +465,7 @@ class PbsSubmitter:
           (waiting for execution). In a normal scenario, the last queue should
           be 'default'.
       total_jobs_cap: The cap for running jobs + pending jobs for EACH queue, (for the sake of code simplicity, this is a per-queue cap).
+      priority_num_Q_jobs:  for each queue, if the current num of jobs in Q status is smaller than this number, then it will be submitted to this queue as normal, but if the current num of Q jobs is bigger than this, the program will check other queues to see it can be submited other queue that is less crowded.
     """
     nq = len(queues_info)
     assert nq > 0
@@ -476,6 +479,11 @@ class PbsSubmitter:
     else:
       assert nq == len(total_jobs_cap)
       self._total_jobs_cap = total_jobs_cap[:]
+    if priority_num_Q_jobs is None:
+      self._priroty_num_Q_jobs = [2]*nq
+    else:
+      self._priroty_num_Q_jobs = priority_num_Q_jobs[:]
+      assert len(self._priroty_num_Q_jobs)==nq
 
   def WaitOnAllJobsFinish(self, grep_pattern = None):
     '''The function will block our script until all related jobs (that can be found under the current user and matches the grep_pattern) have been finished.
@@ -504,8 +512,10 @@ class PbsSubmitter:
     num_queues = len(self._queues_info)
     i_queue = 0
     icnt = 0
+    # Should have priority to submit to the queue that has no waiting jobs in the first round of scanning, therefore icnt=0 is treated with different logic.
     while True:
       queue_name, queue_cap = self._queues_info[i_queue]
+      priority_Q_num = min(self._priroty_num_Q_jobs[i_queue],queue_cap)
       jobR = 0; jobQ = 0; jobC = 0
       # Check how many jobs are in this queue.
       cmd_template = "qstat -a | grep %s | grep \' %s \' | grep %s | wc -l " 
@@ -522,7 +532,10 @@ class PbsSubmitter:
         print "jobs status in the queue <%s>, R/ Q:C, %d/ %d:%d" % (queue_name, jobR, jobQ, jobC)
       njob_pending = jobQ + jobC
       njob_total = njob_pending + jobR
-      if njob_pending < queue_cap and njob_total < self._total_jobs_cap[i_queue]:
+      should_sumbit = False
+      if (njob_total<self._total_jobs_cap[i_queue] and 
+          (njob_pending<priority_Q_num or
+           (njob_pending < queue_cap and icnt>=1))):
         cmd1 = "qsub -q %s %s" % (queue_name, fn_script)
         print line_no(), ("submitting job %s to Queue:%s" %
                           (fn_script, queue_name))
@@ -543,8 +556,6 @@ class PbsSubmitter:
           # Then start polling the first queue again.
           i_queue = 0
     return
-
-
 
 def OverlapRectangle(rect1,rect2):
   '''Compute the overlap between two rectangles, the elements in rect2 can be empty.

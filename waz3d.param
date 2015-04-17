@@ -27,7 +27,7 @@ GEOM_GXY= ngx=361 dgx=25 ogx=16000 ngy=217 dgy=30 ogy=-6210
 # fn_off2ang_par= 
 
 [Solver Vel Inversion]
-minval= 2700
+minval= 2600
 maxval= 4400
 #smooth_rect_sizes=10,8,4
 #smooth_rect_reductions=2,2,1

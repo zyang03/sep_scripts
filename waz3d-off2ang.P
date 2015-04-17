@@ -12,12 +12,13 @@ sign_khy=1.
 gamma_n=21 gamma_o=-25 gamma_d=2.5 
 azim_n=8 azim_o=0 azim_d=22.5
 
-#n_hx_pad=20 n_hy_pad=18
 n_hx_pad=16 n_hy_pad=16
+ohx=-450 dhx=75 nhx=13 ohy=-540 dhy=90 nhy=13
 #n_hx_pad=8 n_hy_pad=10
 
 # This parameter specifies the hxy axis for the delta image in offset domain, different from waz3d.param
-ohx=-450 dhx=50 nhx=19 ohy=-480 dhy=60 nhy=17
+#n_hx_pad=20 n_hy_pad=18
+#ohx=-450 dhx=50 nhx=19 ohy=-480 dhy=60 nhy=17
 #ohx=-150 dhx=50 nhx=7 ohy=-240 dhy=60 nhy=9
 
 verb=y
