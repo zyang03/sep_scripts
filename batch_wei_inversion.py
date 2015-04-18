@@ -58,11 +58,14 @@ def ComputeOptimalStepSize(alpha1,alpha2,costfunc0,costfunc1,costfunc2,alpha_max
       opt_stepsize = alpha_max
   return opt_stepsize
 
+
 if __name__ == '__main__':
   eq_args_cmdline,args = sepbase.parse_args(sys.argv[1:])
   assert args == [], "args is not NULL!: %s" % args 
   dict_args = sepbase.RetrieveAllEqArgs(eq_args_cmdline)
   param_reader = pbs_util.ParallelParamReader(dict_args)
+  nfiles_perjob = dict_args['nfiles_perjob']
+  nfiles_perjobwet = dict_args.get('nfiles_perjobwet')  # wet is more expensive than wem, therefore should use a smaller number.
   path_tmp = param_reader.path_tmp
   solver_par = pbs_util.SolverParamReader(dict_args)
   prefix = dict_args['prefix']
@@ -157,11 +160,15 @@ if __name__ == '__main__':
       # Change the frequency sampling scheme
       if str_ws_wnd_wet:
         eq_args_cmdline['ws_wnd'] = str_ws_wnd_wet
+      if nfiles_perjobwet:
+        eq_args_cmdline['nfiles_perjob'] = nfiles_perjobwet
       batch_wet.Run(sepbase.GenCmdlineArgsFromDict(eq_args_cmdline))
       # Restore frequency sampling scheme
       if str_ws_wnd_wet:
         if str_ws_wnd: eq_args_cmdline['ws_wnd'] = str_ws_wnd
         else: del eq_args_cmdline['ws_wnd']
+      if nfiles_perjobwet:
+        eq_args_cmdline['nfiles_perjob'] = nfiles_perjob
       # Compute search direction s_k from g_k [and s_{i-1}], and apply preconditioning (amplitude scaling and smoothing).
       wib.Save(WeiInversionBookkeeper.GRAD_CALC,fn_save)
     fn_srch = "%s-srch.H" % fn_prefix

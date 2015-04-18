@@ -18,7 +18,6 @@ WET_PAR= nws=44
 #SS_OFFSET_PAR=  nhx=19 dhx=50 ohx=-450 nhy=17 dhy=60 ohy=-480
 SS_OFFSET_PAR=  nhx=13 dhx=75 ohx=-450 nhy=13 dhy=90 ohy=-540
 # For test
-SS_OFFSET_PAR__=  nhx=5 dhx=50 ohx=-100 nhy=3 dhy=60 ohy=-60
 # SS_OFFSET_PAR=  nhx=1 dhx=50 ohx=0 nhy=1 dhy=60 ohy=0
 # For test
 #ANG_PAR=  oang=-55 nang=45 dang=2.5 niter_stomp=4 niter_lin=9
@@ -31,10 +30,10 @@ GEOM_GXY= ngx=380 dgx=25 ogx=16000 ngy=217 dgy=30 ogy=-6210
 
 [Solver Vel Inversion]
 minval= 2400
-maxval= 3800
+maxval= 4000
 #smooth_rect_sizes=10,8,4
 #smooth_rect_reductions=2,2,1
-smooth_rect_sizes=50,40,20 
+smooth_rect_sizes=60,50,10
 smooth_rect_reductions=3,3,1
 nrepeat=2
 # The first iter should not change more than +/- 100m/s (in a rms sense) on average.

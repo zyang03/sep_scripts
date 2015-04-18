@@ -480,7 +480,7 @@ class PbsSubmitter:
       assert nq == len(total_jobs_cap)
       self._total_jobs_cap = total_jobs_cap[:]
     if priority_num_Q_jobs is None:
-      self._priroty_num_Q_jobs = [2]*nq
+      self._priroty_num_Q_jobs = [1]*nq
     else:
       self._priroty_num_Q_jobs = priority_num_Q_jobs[:]
       assert len(self._priroty_num_Q_jobs)==nq
