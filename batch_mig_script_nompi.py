@@ -45,7 +45,7 @@ def Run(argv):
   # Main submission loop.
   AllFilesComputed = False
   while not AllFilesComputed:
-    pbs_submitter.WaitOnAllJobsFinish(prefix)
+    pbs_submitter.WaitOnAllJobsFinish(prefix+'-')
     AllFilesComputed = True
     fn_imgh_list_all = []
     for ish,nsh in zip(ishot_list, nshot_list):  # For each job
@@ -94,7 +94,10 @@ def Run(argv):
     # end for ish,nsh
   # end for while
   # Now combine all imgh files together, use a new pbs_submitter, need to use the non-default queue.
-  pbs_submitter = pbs_util.PbsSubmitter([(param_reader.queues[0], param_reader.queues_cap[0])], None, dict_args['user'])
+  if len(fn_imgh_list_all) >= 50:
+    pbs_submitter = pbs_util.PbsSubmitter([(param_reader.queues[0], param_reader.queues_cap[0])], None, dict_args['user'])
+  else:
+    pbs_submitter = pbs_util.PbsSubmitter(zip(param_reader.queues, param_reader.queues_cap), None, dict_args['user'])
   scripts = []
   combine_pars = ""
   if xmin_cmdl is not None:

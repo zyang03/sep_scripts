@@ -52,7 +52,7 @@ def Run(argv):
   # Main submission loop.
   AllFilesComputed = False
   while not AllFilesComputed:
-    pbs_submitter.WaitOnAllJobsFinish(prefix)
+    pbs_submitter.WaitOnAllJobsFinish(prefix+'-')
     AllFilesComputed = True
     fn_output_list_all = []  # Store names of all output files (one for each job)
     for ish,nsh in zip(ishot_list, nshot_list):  # For each job

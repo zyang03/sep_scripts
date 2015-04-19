@@ -550,9 +550,12 @@ class PbsSubmitter:
           i_queue += 1
         else:  # back-off for a while before retrying
           icnt += 1
-          if icnt == 1:  # Do not print multiple times of the same waiting msg
+          if icnt == 2:  # Do not print multiple times of the same waiting msg
             print "Waiting on the pbs queue..."
-          os.system("sleep 60")  # Sleep a while (secs) before do the query again.
+          if icnt == 1:
+            os.system("sleep 3")
+          else:
+            os.system("sleep 60")  # Sleep a while (secs) before do the query again.
           # Then start polling the first queue again.
           i_queue = 0
     return
