@@ -44,7 +44,7 @@ def Run(argv):
   calc_a2o = wemva_parser.calc_a2o
   # Initialize script_creators and PbsSubmitter.
   pbs_script_creator = pbs_util.PbsScriptCreator(param_reader)
-  assert param_reader.queues[0] != 'default'  # Put sep queue ahead of the default queue.
+  #assert param_reader.queues[0] != 'default'  # Put sep queue ahead of the default queue.
   pbs_submitter = pbs_util.PbsSubmitter(zip(param_reader.queues, param_reader.queues_cap), param_reader.total_jobs_cap, dict_args['user'])
   obj_func_value = None
   # Check input file validity.

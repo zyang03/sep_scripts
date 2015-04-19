@@ -174,6 +174,7 @@ if __name__ == '__main__':
     fn_srch = "%s-srch.H" % fn_prefix
     fn_srch_prev = "%s-srch.H" % fn_prefix_prev
     fn_dv_prev = "%s-dvel.H" % fn_prefix_prev
+    fn_srch_exist = pbs_util.CheckSephFileError(fn_srch,False)==0
     if pbs_util.CheckSephFileError(fn_srch_prev)==0 and pbs_util.CheckSephFileError(fn_dv_prev)==0:
       forget = False
     else:
@@ -182,15 +183,16 @@ if __name__ == '__main__':
       fn_srch_prev = ""
       fn_dv_prev = ""
     if in_loading_stage and wib.resume_stage >= WeiInversionBookkeeper.SRCH_CALC:
-      assert pbs_util.CheckSephFileError(fn_srch,False)==0
+      assert fn_srch_exist    
     else:
-      cmd = ('%s/GenSrchDirFromGradient.x <%s srch_prev=%s grad_prev=%s >%s out=%s@ rect1=%d rect2=%d rect3=%d nrepeat=%d datapath=%s/' %
-             (dict_args['YANG_BIN'], fn_dv, fn_srch_prev,fn_dv_prev, fn_srch,fn_srch, 
-              wib.smooth_rects[0],wib.smooth_rects[1],wib.smooth_rects[2],solver_par.nrepeat, path_iter))
-      if fn_gradmask: cmd += ' gradmask=%s ' % fn_gradmask
-      sepbase.RunShellCmd(cmd,True,True)
-      # Make sure the expected output file is generated.
-      assert pbs_util.CheckSephFileError(fn_srch,True)==0
+      if not fn_srch_exist:  # if file exists, then skip it. otherwise compute
+        cmd = ('%s/GenSrchDirFromGradient.x <%s srch_prev=%s grad_prev=%s >%s out=%s@ rect1=%d rect2=%d rect3=%d nrepeat=%d datapath=%s/' %
+               (dict_args['YANG_BIN'], fn_dv, fn_srch_prev,fn_dv_prev, fn_srch,fn_srch, 
+                wib.smooth_rects[0],wib.smooth_rects[1],wib.smooth_rects[2],solver_par.nrepeat, path_iter))
+        if fn_gradmask: cmd += ' gradmask=%s ' % fn_gradmask
+        sepbase.RunShellCmd(cmd,True,True)
+        # Make sure the expected output file is generated.
+        assert pbs_util.CheckSephFileError(fn_srch,True)==0
       # Adjust the smooth scale after each iteration
       for i in range(len(wib.smooth_rects)):
         wib.smooth_rects[i] -= solver_par.smooth_rect_reductions[i]
@@ -201,18 +203,18 @@ if __name__ == '__main__':
     fn_v1 = "%s-vel1.H" % fn_prefix; fn_v2 = "%s-vel2.H" % fn_prefix
     alpha1 = wib.alpha; alpha2 = 2*alpha1
     assert alpha1 <= alpha_max*1.01, "Sanity Check, step size alpha2(%g) is too large (max=%g)" % (alpha2,alpha_max)
+    fn_vels_exist = pbs_util.CheckSephFileError(fn_v1,False)==0 and pbs_util.CheckSephFileError(fn_v2,False)==0
     if in_loading_stage and wib.resume_stage >= WeiInversionBookkeeper.VEL12_CALC:
-      assert pbs_util.CheckSephFileError(fn_v1,False)==0
-      assert pbs_util.CheckSephFileError(fn_v2,False)==0
+      assert fn_vels_exist
     else:
-      cmd = ('%s/GenTrialModelFromSrchDir.x <%s srch=%s stepsize=%f,%f vmax=%g vmin=%g output=%s,%s datapath=%s/ ' % 
-           (dict_args['YANG_BIN'], wib.fn_v,fn_srch,alpha1,alpha2,solver_par.maxval,solver_par.minval, fn_v1,fn_v2, path_iter))
-      if fn_gradmask: cmd += ' gradmask=%s ' % fn_gradmask
-      sepbase.RunShellCmd(cmd,True,True)
-      assert pbs_util.CheckSephFileError(fn_v1,False)==0
-      assert pbs_util.CheckSephFileError(fn_v2,False)==0
+      if not fn_vels_exist:
+        cmd = ('%s/GenTrialModelFromSrchDir.x <%s srch=%s stepsize=%f,%f vmax=%g vmin=%g output=%s,%s datapath=%s/ ' % 
+             (dict_args['YANG_BIN'], wib.fn_v,fn_srch,alpha1,alpha2,solver_par.maxval,solver_par.minval, fn_v1,fn_v2, path_iter))
+        if fn_gradmask: cmd += ' gradmask=%s ' % fn_gradmask
+        sepbase.RunShellCmd(cmd,True,True)
+        assert pbs_util.CheckSephFileError(fn_v1,False)==0
+        assert pbs_util.CheckSephFileError(fn_v2,False)==0
       wib.Save(WeiInversionBookkeeper.VEL12_CALC,fn_save)
-
     # After fn_v1 and fn_v2 are in place, perform migration.
     fn_img1 = "%s-img1.H" % fn_prefix; fn_img2 = "%s-img2.H" % fn_prefix
     del eq_args_cmdline["dimg"]
