@@ -4,6 +4,7 @@ import inspect
 import sys,re,os,string
 
 sepbin=os.environ["SEP"]+"/bin"
+sfbin=os.environ["RSF"]+"/bin"
 debug=0
 
 # Print the current line no.
@@ -100,17 +101,17 @@ def get_sep_axes_params(file,par,suffix):
 
 def get_sep_grid_params(file,par,o):
  for i in range(6):
-   stat1,out1=commands.getstatusoutput("%s/In %s | grep n%d >log"%(sepbin,file,i+1))
+   stat1,out1=commands.getstatusoutput("%s/sfin %s | grep n%d >log"%(sfbin,file,i+1))
    stat1,out1=commands.getstatusoutput("<log %s/Get parform=no n%d "%(sepbin,i+1))
    stat1,out2=commands.getstatusoutput("<log %s/Get parform=no o%d "%(sepbin,i+1))
    stat1,out3=commands.getstatusoutput("<log %s/Get parform=no d%d "%(sepbin,i+1))
    stat1,out4=commands.getstatusoutput("<log %s/Get parform=no label%d "%(sepbin,i+1))
    if stat1:
      err("Trouble reading parameters from %s"%file)
-   if len(out1)==0:out1="1"
-   if len(out2)==0:out2="0"
-   if len(out3)==0:out3="1"
-   if len(out4)==0:out4=" "
+   if len(out1)==0: out1="1"
+   if len(out2)==0 or out2=='?': out2="0"
+   if len(out3)==0 or out3=='?': out3="1"
+   if len(out4)==0 or out4=='?': out4=" "
    if not par.has_key("n%s_%d"%(o,i+1)): par["n%s_%d"%(o,i+1)]=out1
    if not par.has_key("o%s_%d"%(o,i+1)): par["o%s_%d"%(o,i+1)]=out2
    if not par.has_key("d%s_%d"%(o,i+1)): par["d%s_%d"%(o,i+1)]=out3
