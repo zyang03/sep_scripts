@@ -67,6 +67,12 @@ def get_sep_his_par(file, par):
   assert stat1==0, err("!Trouble reading param %s from file %s" % (par, file))
   return out1
 
+def get_sep_his_par_sf(file, par):
+  """Deal with seplib Get bug."""
+  stat1,out1=commands.getstatusoutput("%s/sfget parform=no <%s %s"%(sfbin,file,par))
+  assert stat1==0, err("!Trouble reading param %s from file %s using sfget" % (par, file))
+  return out1
+
 def get_sep_axis_params(file, iaxis):
   """Note that iaxis is 1-based, returns a list of *strings* [n,o,d,label]."""
   stat1,out1=commands.getstatusoutput("%s/Get parform=no <%s n%d"%(sepbin,file,iaxis))

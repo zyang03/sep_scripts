@@ -36,8 +36,8 @@ def ComputeOptimalStepSize(alpha1,alpha2,costfunc0,costfunc1,costfunc2,alpha_max
     print "The parabola is curving downward!"
     min_index = costfuncs.index(min(costfuncs))
     if min_index == 0:
-      print "min_index=0, stepping halted! Should reduce the stepsize by 4."
-      opt_stepsize = stepsizes[1]*0.25  # Pure heuristic, reduce the stepsize.
+      print "min_index=0, stepping halted! Should reduce the stepsize by 8."
+      opt_stepsize = stepsizes[1]*0.125  # Pure heuristic, reduce the stepsize.
     elif min_index == 1:
       opt_stepsize = stepsizes[1]
       assert False  # Impossible case, since curving downward
@@ -48,8 +48,8 @@ def ComputeOptimalStepSize(alpha1,alpha2,costfunc0,costfunc1,costfunc2,alpha_max
     if opt_stepsize > 2*alpha2:  # Hold the rein a bit.
       opt_stepsize = 2*alpha2
     elif opt_stepsize <= 0:
-      print "opt_stepsize<0, stepping halted! Reduce the stepsize by 4."
-      opt_stepsize = stepsizes[1]*0.25 # Pure heuristic, reduce the stepsize.
+      print "opt_stepsize<0, stepping halted! Reduce the stepsize by 8."
+      opt_stepsize = stepsizes[1]*0.125 # Pure heuristic, reduce the stepsize.
     else:
       pass
   if alpha_max is not None:
@@ -77,6 +77,7 @@ if __name__ == '__main__':
   fn_gradmask = dict_args.get('gradmask',None)
   if fn_gradmask: print "Using gradmask: %s" % (fn_gradmask)
   wemva_type_parser = pbs_util.WemvaTypeParser(dict_args['wemva_type'],True)
+  reuse_stepsize = sepbase.ParseBooleanString(dict_args['reuse_stepsize'])
   assert 'mode' not in dict_args
   eq_args_cmdline['mode'] = wemva_type_parser.tomo_mode
   # The inversion code, v is vel model, s is search direction.
@@ -104,17 +105,20 @@ if __name__ == '__main__':
     # checking if the inverted velocity file from last time is recorded.
     iter_beg_old = iter_beg
     for iter in range(niter-1, iter_beg_old-1, -1):  # From [niter-1 to iter_beg], see if we have fn_vn name in place.
-      fn_prefix = "%s/%s-iter%02d" % (prefix,path_iter,iter)
+      fn_prefix = "%s/%s-iter%02d" % (path_iter,prefix,iter)
       fn_vn = "%s-velnew.H" % fn_prefix
       if pbs_util.CheckSephFileError(fn_vn,False)==0:
+        print 'Resume from velocity iter file %s...' % fn_vn
         iter_beg = iter+1  # Starting from this new iteration number.
         wei_inv_bookkeeper.iter = iter_beg
         wei_inv_bookkeeper.fn_v = fn_vn  # Set the existing fn_vn as the starting velocity model.
         # Further extra extra info like stepsizes(alpha) from the history file.
-        str_alphas = sepbase.get_sep_his_par(fn_vn,"stepsizes")
+        str_alphas = sepbase.get_sep_his_par_sf(fn_vn,"stepsizes")
         if str_alphas:  # We can start from iter+1 instead of the very begining.
           wei_inv_bookkeeper.stepsizes = map(float,str_alphas.split(','))
-        str_objfuncs = sepbase.get_sep_his_par(fn_vn,"objfuncs")
+          if reuse_stepsize:
+            wei_inv_bookkeeper.alpha = wei_inv_bookkeeper.stepsizes[-1]
+        str_objfuncs = sepbase.get_sep_his_par_sf(fn_vn,"objfuncs")
         if str_objfuncs:
           wei_inv_bookkeeper.objfuncs = map(float,str_objfuncs.split(','))
         break
@@ -123,8 +127,9 @@ if __name__ == '__main__':
   if wib.alpha is None: wib.alpha = alpha_init
   if not wib.smooth_rects: wib.smooth_rects = smooth_rects_init
   print "Current inversion bookkeeper status: %s" % wib
+  print "iter_beg=%d, wib.alpha=%g, wib.fn_v=%s" % (iter_beg, wib.alpha,wib.fn_v)
   # The main inversion loop.
-  forget = True
+  forget = dict_args.get('forget',True)
   for wib.iter in range(iter_beg, niter):
     in_loading_stage = (wib.iter==iter_beg and resume_from_saving_pt)
     # Calc I(v_k) and J_k, and gradient g_k (i.e. fn_dv)
@@ -175,11 +180,14 @@ if __name__ == '__main__':
     fn_srch_prev = "%s-srch.H" % fn_prefix_prev
     fn_dv_prev = "%s-dvel.H" % fn_prefix_prev
     fn_srch_exist = pbs_util.CheckSephFileError(fn_srch,False)==0
-    if pbs_util.CheckSephFileError(fn_srch_prev)==0 and pbs_util.CheckSephFileError(fn_dv_prev)==0:
-      forget = False
-    else:
-      forget = True
-      print "!The gradinfo from prev iteration is not present/valid, use steepest descent in this iter. %s, %s" % (fn_srch_prev,fn_dv_prev)
+    if not forget and (pbs_util.CheckSephFileError(fn_srch_prev)==0 and pbs_util.CheckSephFileError(fn_dv_prev)==0):
+      pass
+    else:  # Cannot use Polak-Riberie search direction.
+      if forget:
+        print "!forget=True, use steepest descent in this iter."
+        forget = False
+      else:
+        print "!The gradinfo from prev iteration is not present/valid, use steepest descent in this iter. %s, %s" % (fn_srch_prev,fn_dv_prev)
       fn_srch_prev = ""
       fn_dv_prev = ""
     if in_loading_stage and wib.resume_stage >= WeiInversionBookkeeper.SRCH_CALC:
@@ -253,7 +261,7 @@ if __name__ == '__main__':
       wib.alpha = ComputeOptimalStepSize(alpha1,alpha2,wib.objfunc,wib.objfunc1,wib.objfunc2,alpha_max)
       objfuncs3 = [wib.objfunc, wib.objfunc1, wib.objfunc2]
       wib.objfuncs.extend(objfuncs3)
-      print "objfuncs for current iter: [%g,%g,%g], " % (objfuncs3[0],objfuncs3[1],objfuncs3[2]), "steps=%s" % ([alpha1,alpha2,wib.alpha])
+      print "objfuncs for current iter %d: [%g,%g,%g], " % (wib.iter, objfuncs3[0],objfuncs3[1],objfuncs3[2]), "steps=%s" % ([alpha1,alpha2,wib.alpha])
       wib.stepsizes.append(wib.alpha);
       # Compute the updated vel model, the filename is written to fn_v
       cmd = ('%s/GenTrialModelFromSrchDir.x <%s srch=%s stepsize=%f vmax=%g vmin=%g output=%s datapath=%s/' %

@@ -197,7 +197,7 @@ class PbsScriptCreator:
   def __init__(self, param_reader):
     self.param_reader = param_reader
     self.dict_args = param_reader.dict_args
-    self.user = self.dict_args['user']
+    self.user = self.dict_args.get('user')
     self._starting_new_script = False
     self._job_filename_stem = None
 
@@ -227,6 +227,7 @@ class PbsScriptCreator:
       cmd2 += "\nsed -i '/#PBS -d/c\#PBS -d %s' %s" % (
           self.param_reader.path_out, self.fn_script)
       sepbase.RunShellCmd(cmd0+'\n'+cmd1+'\n'+cmd2)
+      fp = open(self.fn_script,'a'); fp.writelines([self.CmdFinalCleanUpTempDir()]); fp.close() # clear empty temp space first.
     # Then write the content in scripts.
     fp_o = open(self.fn_script,'a'); fp_o.writelines(scripts); fp_o.close()
     return self.fn_script
@@ -284,11 +285,55 @@ class PbsScriptCreator:
     return cmd
 
 
-class WeiScriptor:
-  '''Given the input arg parameters, generate scripts that performs a WEI (Wave equation inversion) operation.'''
+class JobScriptor:
   def __init__(self, param_reader):
     self.param_reader = param_reader
     self.dict_args = param_reader.dict_args
+    return
+
+  def CmdFinalCleanUpTempDir(self):
+    cmd = '\n# Final clean up, remove the files at tmp folder.'
+    cmd += "\nfind %s/ -maxdepth 1 -type f -user %s -exec rm {} \\;\n" % (
+        self.param_reader.path_tmp, self.user)
+    return cmd
+
+  def CmdCombineMultipleOutputSephFiles(self, local_seph_list, output_fn, combine_pars="", datapath=None, initial_seph_domain_file=None):
+    '''
+    Args:
+      initial_seph_domain_file: The sep header file used for determine the output size, if == None then use the first element in local_seph_list.
+    '''
+    if datapath is None:
+      datapath = os.path.split(os.path.abspath(output_fn))[0]
+    cmd = '# Combine the results from multiple shots into one.\n'
+    n = len(local_seph_list)
+    if n == 1:
+      cmd1 = "time Cp %s %s datapath=%s/" % (local_seph_list[0],output_fn,datapath)
+    else:
+      if initial_seph_domain_file is None:
+        initial_seph_domain_file = local_seph_list[0]
+      #axis 3,4,5 are (x,y,z)
+      if n <= 6:  # If the list is small, just pile filenames on the command line arguments.
+        cmd1 = "time %s/Combine <%s fnames=%s output=%s %s datapath=%s/" % (
+            self.dict_args['YANG_BIN'],initial_seph_domain_file,
+            ','.join(local_seph_list), output_fn, combine_pars,datapath)
+      else:  # Write filenames line-by-line into a temporary file.
+        fn_tflist = "%s.flist"%(os.path.splitext(output_fn)[0])
+        fp_tflist = open(fn_tflist,"w")
+        fp_tflist.write("\n".join(local_seph_list))
+        fp_tflist.close()
+        #axis 3,4,5 are (x,y,z)
+        cmd1 = "time %s/Combine <%s filelist=%s output=%s %s datapath=%s/" % (
+            self.dict_args['YANG_BIN'],initial_seph_domain_file,
+            fn_tflist, output_fn, combine_pars, datapath)
+    # The combine process could go wrong, therefore add a conditional clause
+    cmd += (cmd1+CheckPrevCmdResultCShellScript(cmd1))
+    return cmd
+
+
+class WeiScriptor(JobScriptor):
+  '''Given the input arg parameters, generate scripts that performs a WEI (Wave equation inversion) operation.'''
+  def __init__(self, param_reader):
+    JobScriptor.__init__(self, param_reader)
     if 'WET_PAR' not in self.dict_args:
       self.dict_args['WET_PAR'] = ''
     self.sz_shotrange = None
