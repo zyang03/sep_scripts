@@ -150,6 +150,10 @@ class JobParamReader:
     self.njobs_max = 1  # For now set it to 1.
     self.path_out = abspath(dict_args.get("path_out", os.getcwd()))
     self.path_tmp = abspath(dict_args.get('path_tmp', '/tmp'))
+    if self.dict_args.get('user') is None:
+      self.user = os.environ['USER']
+    else:
+      self.user = dict['user']
     return
 
 class ParallelParamReader(JobParamReader):
@@ -197,7 +201,7 @@ class PbsScriptCreator:
   def __init__(self, param_reader):
     self.param_reader = param_reader
     self.dict_args = param_reader.dict_args
-    self.user = self.dict_args.get('user')
+    self.user = param_reader.user
     self._starting_new_script = False
     self._job_filename_stem = None
 
@@ -294,7 +298,7 @@ class JobScriptor:
   def CmdFinalCleanUpTempDir(self):
     cmd = '\n# Final clean up, remove the files at tmp folder.'
     cmd += "\nfind %s/ -maxdepth 1 -type f -user %s -exec rm {} \\;\n" % (
-        self.param_reader.path_tmp, self.user)
+        self.param_reader.path_tmp, self.param_reader.user)
     return cmd
 
   def CmdCombineMultipleOutputSephFiles(self, local_seph_list, output_fn, combine_pars="", datapath=None, initial_seph_domain_file=None):

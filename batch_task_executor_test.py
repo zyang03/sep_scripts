@@ -1,4 +1,5 @@
 #!/usr/bin/python
+
 import copy
 import random
 import sepbase
@@ -8,6 +9,8 @@ import unittest
 from batch_task_executor import *
 import pbs_util
 
+### An example to define a batch task through inheriting the BatchTaskComposer Task.
+### Read ~zyang03/script/batch_task_executor.py to learn the detailed specifications/explanations of the interfaces defined in BatchTaskComposer.
 class DummyBatchTaskComposer(BatchTaskComposer):
   def __init__(self, param_reader, njobs, avg_nfiles_perjob):
     BatchTaskComposer.__init__(self)
@@ -17,6 +20,7 @@ class DummyBatchTaskComposer(BatchTaskComposer):
     self.subjobids = range(0, self.njobs)
     self.subjobfns_list = [None]*self.njobs
     path_out = param_reader.path_out
+    random.seed(0)
     # Create a random number of files for each subjob.
     for i in range(0,self.njobs):
       nfiles = random.randint(1,2*self.avg_nfiles_perjob-1)
@@ -30,6 +34,7 @@ class DummyBatchTaskComposer(BatchTaskComposer):
     subjobfns = self.subjobfns_list[subjobid]
     # Build scripts that create the files designated in subjobfns
     # Simulate 40% chance a job would fail by not having full outputs.
+    random.seed()
     fail = random.randint(1,100) >= 60
     scripts = []
     cnt = 0
@@ -60,14 +65,14 @@ if __name__ == '__main__':
   eq_args_from_cmdline,args = sepbase.parse_args(sys.argv)
   #dict_args = sepbase.RetrieveAllEqArgs(eq_args_from_cmdline)
   param_reader = pbs_util.JobParamReader(eq_args_from_cmdline)
-  dummy_btc = DummyBatchTaskComposer(param_reader,5,2)
+  dummy_btc = DummyBatchTaskComposer(param_reader,3,3)
   bte = BatchTaskExecutor(param_reader)
   prefix = param_reader.prefix
   bte.LaunchBatchTask(prefix, dummy_btc)
 
   # Combine the files to one single file.
-  _, fns_list = dummy_btc.GetSubJobsInfo()
+  _, fns_list = dummy_btc.GetSubjobsInfo()
   fn_seph_list = [fn for fns in fns_list for fn in fns]
-  print "fn_seph_list=%s"
+  print "fn_seph_list=%s" % fn_seph_list
   CombineMultipleOutputSephFiles(bte, fn_seph_list, "test-all.H")
 

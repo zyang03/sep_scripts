@@ -2,18 +2,15 @@
 import commands,os,sys
 import pbs_util
 import sepbase
-
-## This program will try to batch generate migration images (not limited to migrations).
-## Basically, it performs wei jobs that can be parallellized in the granularity of individual shots.
-
-# Usage1:    *.py param=waz3d.param pbs_template=pbs_script_tmpl.sh nfiles=1001 nfiles_perbatch=10 path=path_out prefix=hess-waz3d queue=q35 nnodes=0 njobmax=5 ish_beg=0 prefix=pf img=img_output.H
-# Usage2:     User can also supply a list of ish_begs to start with
-#             *.py ... ish_beglist=? ...
+from os.path import abspath
 
 
 class BatchTaskExecutor:
-  '''Run a batch job, with automatic fault recovery and dynamic work load
-  splitting.'''
+  '''Run a batch job, with automatic fault recovery,
+  Basically, it performs jobs that can be parallellized in the granularity of individual shots,
+  like wave-equation migration and tomography operators.
+  '''
+
   def __init__(self,job_param_reader,pbs_submitter=None):
     self.job_param_reader = job_param_reader
     self.pbs_submitter = pbs_submitter
@@ -28,7 +25,11 @@ class BatchTaskExecutor:
     pbs_script_creator = pbs_util.PbsScriptCreator(param_reader)
     # Main submission loop.
     AllFilesComputed = False
+    rounds = 0
     while not AllFilesComputed:
+      if rounds >= 5:
+        sepbase.err('!The batch_task %s has been iterated over %d rounds, but not fully completed. Check your job description!')
+      rounds += 1
       pbs_submitter.WaitOnAllJobsFinish(prefix+'-')
       AllFilesComputed = True
       subjobids, subjobfns_list = batch_task_composer.GetSubjobsInfo()
@@ -64,33 +65,53 @@ class BatchTaskExecutor:
 
 
 class BatchTaskComposer:
-  '''Basically a list of tuples, each tuple is (subjobid, [fn1,fn2,...]), the
-  list of filenames is the designated files that should be in place after the
-  subjob finishes.'''
+  '''NOTICE: This is the interface that you (as a user) needs to program, which implements the batch task/job description.
+  The way the batch task is defined is explained as follows (a migration example will be used in the explaination):
+  1): For each batch task, it will be divided into multiple (>=1) subjobs.
+      How the batch task will be divided is up to the design choice of the user.
+      Each subjob is considered to be the workload submitted to a single computer node as one PBS job.
+      In the example of WE-migration of 50 shots data. One possible way to divide this task is to break the 50 shots into 10 groups, and we create 10 subjobs, with each subjob being responsible for migrating the 5 shots within the corresponding shots group.
+  2): For each subjob, the user is responsible to provide the actual computation recipe that will perform the expected work, in the form of shell script lines.
+      For the migration example, the computation recipe for the first subjob (subjobid=0) can be sth like:
+      ```
+        mybin/Migration.x vel=vel.H <dat-shot0.H >img0.H
+        mybin/Migration.x vel=vel.H <dat-shot1.H >img1.H
+        mybin/Migration.x vel=vel.H <dat-shot2.H >img2.H
+        mybin/Migration.x vel=vel.H <dat-shot3.H >img3.H
+        mybin/Migration.x vel=vel.H <dat-shot4.H >img4.H
+      ```
+      Note that here all the boiler-plates in the original PBS script has been taken care by the framework, and the user does not need to worry about it.
+  '''
   def __init__(self):
-    '''Constructor.'''
+    '''Dummy constructor.'''
     return
 
   def GetSubjobScripts(self, subjobid):
-    '''Return the scripts content for that subjob, and the subjob's name.
+    '''Implement this interface to specify the computation recipe for each subjob.
     Returns:
-      scripts: a list of strings. Each strings should corresponds to one line
-      of cmd.
-      jobname: the designated jobname, if set=None, then the program will
-      create a jobname automatically from subjobid.
+      scripts: a list of strings. Each strings should corresponds to one line of cmdline execution.
+      jobname: the designated jobname, if set=None, then the framework will generate a jobname automatically based on subjobid.
     '''
     assert False, "!Implement me in the derived class."
     return
 
   def GetSubjobsInfo(self):
-    '''Should return two lists, subjobids and subjobfns.'''
+    '''Implement this interface to specify the subjobs description.
+    The function should return two lists: subjobids and subjobfns.
+    Returns:
+      subjobids: is a list of unique interger ids, each one refers to a subjob.
+      subjobfns: is a list of lists (string-type). Each sublist contains multiple (>=1) filenames that are the expected outcome of executing the corresponding subjob.
+    In the migration example, subjobids=[0,1,2,3,...,9], and subjobfns will be sth like:
+    [ [img0.H,img1.H,...img4.H], [img5.H,img6.H,...,img9.H], ... ]
+    Basically, the list of filenames in subjobfns are the designated files that should be in place after that subjob finishes.
+    '''
     assert False, "!Implement me in the derived class."
     return
 
 
 class CombineTaskComposer(BatchTaskComposer):
   '''.'''
-  def __init__(self, param_reader, input_seph_list, output_fn, combine_pars, datapath, initial_seph_domain_file)
+  def __init__(self, param_reader, input_seph_list, output_fn, combine_pars, datapath, initial_seph_domain_file):
     '''Constructor.'''
     BatchTaskComposer.__init__(self)
     self.param_reader = param_reader
@@ -104,7 +125,7 @@ class CombineTaskComposer(BatchTaskComposer):
   def GetSubjobScripts(self, subjobid):
     '''Return the scripts content for that subjob.'''
     assert subjobid == 0
-    scriptor = JobScriptor(self.param_reader)
+    scriptor = pbs_util.JobScriptor(self.param_reader)
     scripts = []
     scripts.append(scriptor.CmdCombineMultipleOutputSephFiles(self.input_seph_list, self.output_fn, self.combine_pars, self.datapath, self.initial_seph_domain_file))
     return scripts,None
@@ -113,13 +134,16 @@ class CombineTaskComposer(BatchTaskComposer):
     '''Should return two lists, subjobids and subjobfns. In this case only one
     job and one file.
     '''
-    return [0], [[output_fn]]
+    return [0], [[self.output_fn]]
 
 
 def CombineMultipleOutputSephFiles(batch_task_executor, local_seph_list, output_fn, combine_pars="", datapath=None, initial_seph_domain_file=None):
+  '''Use this function to stack multiple .H sep files into a single one. This is useful in cases like stacking all partial images to one single final
+     image in a migration task.
+  '''
   bte = batch_task_executor
-  param_reader = batch_task_executor.param_reader
-  ctc = CombineTaskComposer(param_reader, local_seph_list, output_fn,
+  param_reader = batch_task_executor.job_param_reader
+  ctc = CombineTaskComposer(param_reader, local_seph_list, abspath(output_fn),
       combine_pars, datapath, initial_seph_domain_file)
   prefix = param_reader.prefix
   bte.LaunchBatchTask(prefix, ctc)
