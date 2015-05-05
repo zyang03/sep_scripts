@@ -70,6 +70,7 @@ if __name__ == '__main__':
   solver_par = pbs_util.SolverParamReader(dict_args)
   prefix = dict_args['prefix']
   path_iter = os.path.abspath(dict_args['path_iter'])  # The path that save the intermediate results
+  assert os.path.exists(path_iter)
   niter = int(dict_args['niter'])
   iter_beg = int(dict_args.get('iter_beg',0))
   str_ws_wnd_wet = dict_args.get('ws_wnd_wet')  # Might use different frequency sampling for tomo operator.
@@ -207,6 +208,7 @@ if __name__ == '__main__':
         if wib.smooth_rects[i]<1: wib.smooth_rects[i]=1
       wib.Save(WeiInversionBookkeeper.SRCH_CALC,fn_save)
     # Compute step size by trying out two trial model points along the s_k dir,
+    assert False  # BREAK the script, for TEST purpose.
     # stepsizes are alpha1,alpha2
     fn_v1 = "%s-vel1.H" % fn_prefix; fn_v2 = "%s-vel2.H" % fn_prefix
     alpha1 = wib.alpha; alpha2 = 2*alpha1

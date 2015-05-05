@@ -1,0 +1,25 @@
+[OnewayWet]
+# Params for oneway Wave-equation tomography code by Tang.
+TANG_BIN=  /data/sep/zyang03/other/yaxun_weo/bin
+YANG_BIN=  /data/sep/zyang03/bin
+
+source_type= pt
+MIG_PAR_WAZ3D=  pdip=45 offset=y ntpx=25 nws=76 oper="foufd" nxpad_beg=25 nxpad_end=25 memchk=n report=y comsou=n offset=y
+
+SS_OFFSET_PAR=  nhx=51 dhx=20 ohx=-500 nhy=1 dhy=20 ohy=0
+
+#ANG_PAR=  oang=-55 nang=45 dang=2.5 niter_stomp=4 niter_lin=9
+#GEOM_GXY= ngx=273 dgx=25 ogx=17500  ngy=175 dgy=30 ogy=-6210
+GEOM_GXY= ngx=390 dgx=25 ogx=15750 ngy=227 dgy=30 ogy=-6510
+
+[Solver Vel Inversion]
+minval= 1500
+maxval= 3200
+
+smooth_rect_sizes=60,1,10
+smooth_rect_reductions=5,0,1
+nrepeat=1
+
+initial_perturb_scale=30
+max_perturb_scale=100
+

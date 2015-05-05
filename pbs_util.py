@@ -106,6 +106,7 @@ class ShotsInfo:
   def __init__(self, fn_shots_info):
     '''Helper class that manages the individual shot file information stored in a .shotsInfo file.'''
     self._fn_shots_info = fn_shots_info
+    assert os.path.exists(fn_shots_info)
     # Read all the lines.
     fp = open(fn_shots_info,'r')
     self.lines = []
@@ -133,6 +134,7 @@ class JobParamReader:
   def __init__(self, dict_args):
     self.dict_args = dict_args
     self.fname_template_script = dict_args['pbs_template']
+    assert os.path.exists(self.fname_template_script)
     self.queues = dict_args.get('queues','default').split(',')
     self.queues_cap = dict_args.get('queues_cap')
     nqueue = len(self.queues)
@@ -149,11 +151,12 @@ class JobParamReader:
       assert nqueue == len(self.total_jobs_cap)
     self.njobs_max = 1  # For now set it to 1.
     self.path_out = abspath(dict_args.get("path_out", os.getcwd()))
+    assert os.path.exists(self.path_out)
     self.path_tmp = abspath(dict_args.get('path_tmp', '/tmp'))
     if self.dict_args.get('user') is None:
       self.user = os.environ['USER']
     else:
-      self.user = dict['user']
+      self.user = dict_args['user']
     return
 
 class ParallelParamReader(JobParamReader):
@@ -172,6 +175,8 @@ class WeiParamReader(ParallelParamReader):
     self.source_type = dict_args.get("source_type", "plane")
     self.fn_csou = abspath(dict_args["csou"])
     self.fn_v3d = abspath(dict_args["vel"])
+    assert os.path.exists(self.fn_csou)
+    assert os.path.exists(self.fn_v3d)
     # If user only select a portion of frequencies to migrate/compute/model, w_f,w_n
     self.ws_wnd_f = self.ws_wnd_n = self.ws_wnd_d = None
 
@@ -231,7 +236,7 @@ class PbsScriptCreator:
       cmd2 += "\nsed -i '/#PBS -d/c\#PBS -d %s' %s" % (
           self.param_reader.path_out, self.fn_script)
       sepbase.RunShellCmd(cmd0+'\n'+cmd1+'\n'+cmd2)
-      fp = open(self.fn_script,'a'); fp.writelines([self.CmdFinalCleanUpTempDir()]); fp.close() # clear empty temp space first.
+      fp = open(self.fn_script,'a'); fp.writelines([self.CmdFinalCleanUpTempDir()+'\n']); fp.close() # clear empty temp space first.
     # Then write the content in scripts.
     fp_o = open(self.fn_script,'a'); fp_o.writelines(scripts); fp_o.close()
     return self.fn_script
@@ -402,8 +407,9 @@ class WeiScriptor(JobScriptor):
     ymin, ymax = image_domains[2:4]
     zmin, zmax = image_domains[4:6]
     if xmin is not None:
-      cmd1 += " image_xmin=%.1f image_xmax=%.1f image_ymin=%.1f image_ymax=%.1f " % (
-          xmin,xmax,ymin,ymax)
+      cmd1 += " image_xmin=%.1f image_xmax=%.1f " % (xmin,xmax)
+    if ymin is not None:
+      cmd1 += " image_ymin=%.1f image_ymax=%.1f " % (ymin,ymax)
     if zmin is not None:
       cmd1 += " image_zmin=%.1f image_zmax=%.1f " % (zmin,zmax)
     return cmd + cmd1+CheckPrevCmdResultCShellScript(cmd1)
@@ -551,7 +557,7 @@ class PbsSubmitter:
       if int(out1) > 0:
         icnt += 1
         if icnt == 1: print "Wait On All Jobs to Finish (%s)..." % grep_pattern[0:15]
-        time.sleep(5)
+        time.sleep(2)
       else:
         break
     return
@@ -591,7 +597,7 @@ class PbsSubmitter:
         stat1, out1 = commands.getstatusoutput(cmd1)
         if stat1 != 0:
           sepbase.err("submit job failed, msg=%d,%s" % (stat1,out1))
-        os.system("sleep 5")  # Stagger the job start-off time a bit.
+        os.system("sleep 2")  # Stagger the job start-off time a bit.
         break
       else:
         # if not last queue, then try next queue
@@ -604,7 +610,7 @@ class PbsSubmitter:
           if icnt == 1:
             os.system("sleep 3")
           else:
-            os.system("sleep 60")  # Sleep a while (secs) before do the query again.
+            os.system("sleep 30")  # Sleep a while (secs) before do the query again.
           # Then start polling the first queue again.
           i_queue = 0
     return
@@ -644,14 +650,16 @@ class WemvaTypeParser:
     self._map_wemva_type_calc_ang = {
         "1" : (False, False, False), # Stack Power
         "2" : (False, False, False), # Stack Power
-        "3" : (True, True, False), # Stack Power
+        "3" : (True, True, False), 
+        "4" : (False, False, False),
         "11": (False, True, True),  # RMO
-        "12": (False, True, True),  # RMO
+        "12": (False, True, True),  
         "13": (True, True, True),  # RMO
+        "21": (False, True, True),  # RMO, semb0
         "61": (False, False,False), # DSO
         "62": (False, False,False),
         "63": (False, False,False),
-        "64": (True, True,False),
+        "64": (True, True,False)
     }
     if not calc_dimg:
       self.calc_ang_gather = self._map_wemva_type_calc_ang[wemva_type][0]

@@ -101,7 +101,9 @@ def Run(argv):
   scripts = []
   combine_pars = ""
   if xmin_cmdl is not None:
-    combine_pars = "oe3=%g,%g oe4=%g,%g ndim=5" % (xmin_cmdl,xmax_cmdl,ymin_cmdl,ymax_cmdl)
+    combine_pars += "oe3=%g,%g ndim=5" % (xmin_cmdl,xmax_cmdl)
+  if ymin_cmdl is not None:
+    combine_pars += "oe4=%g,%g " % (ymin_cmdl,ymax_cmdl)
   scripts.append(pbs_script_creator.CmdCombineMultipleOutputSephFiles(
       fn_imgh_list_all, fn_imgh_final, combine_pars, datapath_final))
   pbs_script_creator.CreateScriptForNewJob(fn_base_wo_ext)

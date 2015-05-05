@@ -22,6 +22,8 @@ def Run(argv):
   param_reader = pbs_util.JobParamReader(dict_args)
   prefix = param_reader.prefix
   path_tmp = param_reader.path_tmp
+  fn_wemva_par = dict_args['fn_wemva_objfunc_par']
+  assert os.path.exists(fn_wemva_par), 'fn_wemva_objfunc_par is not valid! Check: %s' % fn_wemva_par
   # Get the input image file.
   fn_img = os.path.abspath(dict_args['img'])
   # string fn_img_base_wo_ext serves as a single unique identifier.
@@ -36,12 +38,18 @@ def Run(argv):
     fn_dimg = os.path.abspath(fn_dimg)
     fn_dimg_path, fn_dimg_base_wo_ext, _ = pbs_util.SplitFullFilePath(fn_dimg)
     fn_dimg_ang = "%s/%s-ang.H" % (fn_dimg_path, fn_dimg_base_wo_ext)
+    fn_dimg_zxhx = "%s/%s-zxhx.H" % (fn_dimg_path, fn_dimg_base_wo_ext)
   b3D = dict_args['b3D']
+  do_3d = sepbase.ParseBooleanString(b3D)
   wemva_type = dict_args['wemva_type']
-  # Check if need to compute angle gather
-  wemva_parser = pbs_util.WemvaTypeParser(wemva_type,calc_dimg)
-  calc_ang_gather = wemva_parser.calc_ang_gather
-  calc_a2o = wemva_parser.calc_a2o
+  if do_3d:
+    # Check if need to compute angle gather
+    wemva_parser = pbs_util.WemvaTypeParser(wemva_type,calc_dimg)
+    calc_ang_gather = wemva_parser.calc_ang_gather
+    calc_a2o = wemva_parser.calc_a2o
+  else: # In 2-D case, A2O and O2A are handled inside the CalcWemvaObj.x executables.
+    calc_ang_gather = False
+    calc_a2o = False
   # Initialize script_creators and PbsSubmitter.
   pbs_script_creator = pbs_util.PbsScriptCreator(param_reader)
   #assert param_reader.queues[0] != 'default'  # Put sep queue ahead of the default queue.
@@ -75,8 +83,11 @@ def Run(argv):
         off2ang3d.Run(sepbase.GenCmdlineArgsFromDict(eq_args_from_cmdline_cp))
   # Start computing the objective functions.
   if calc_dimg:
-    if calc_a2o: fnt_dimg_out = fn_dimg_ang
-    else: fnt_dimg_out = fn_dimg
+    if do_3d:
+      if calc_a2o: fnt_dimg_out = fn_dimg_ang
+      else: fnt_dimg_out = fn_dimg
+    else:
+      fnt_dimg_out = fn_dimg_zxhx
   while True:
     job_identifier = 'objf-'+fn_img_base_wo_ext
     pbs_script_creator.CreateScriptForNewJob(job_identifier)
@@ -109,16 +120,32 @@ def Run(argv):
     # Compute the obj func and dimg
     scripts = []
     fn_costcube = "%s/%s-costcube.H" % (fn_img_path, fn_img_base_wo_ext)
-    cmd = 'time %s/CalcWemvaObjFunc.x par=%s img=%s b3D=%s wemva_type=%s datapath=%s/ cost_cube.H=%s' % (dict_args['YANG_BIN'], dict_args['fn_wemva_objfunc_par'], fn_img, b3D, wemva_type, path_out, fn_costcube)
+    fn_img_old = fn_img
+    cmd = ''
+    if not do_3d:  # In 2D case, Convert the hxyxyz image to zxhx order.
+      fn_img = '%s/%s-zxhx.H' % (fn_img_path,fn_img_base_wo_ext)
+      assert fn_img_old != fn_img, 'fn_img_old=%s, fn_img=%s' % (fn_img_old, fn_img)
+      cmd = '%s/YReorder <%s reshape=2,4,5 mapping=3,2,1 | Window3d >%s out=%s@' % (dict_args['YANG_BIN'],fn_img_old, fn_img, fn_img)
+      scripts.append(cmd+pbs_util.CheckPrevCmdResultCShellScript(cmd)+'\n')
+    cmd = 'time %s/CalcWemvaObjFunc.x par=%s img=%s b3D=%s wemva_type=%s datapath=%s/ cost_cube.H=%s' % (dict_args['YANG_BIN'], fn_wemva_par, fn_img, b3D, wemva_type, path_out, fn_costcube)
     if calc_ang_gather:
       cmd += ' ang_img=%s imgh0_zxy=%s rmo.H=%s ' % (fn_img_ang, fn_imgh0_zxy, fn_rmoplot_img)
-    if calc_dimg: cmd += ' dimg=%s '%fnt_dimg_out
+    if calc_dimg:
+      cmd += ' dimg=%s ' % fnt_dimg_out
+      if not do_3d:
+        fnb = fn_img_base_wo_ext
+        stem = '%s/%s' % (path_out,fnb)
+        cmd += ' angCube=%s-ang.H angCubeBp=%s-angbp.H semb=%s-semb.H dJdu=%s-dJdu.H finalWt=%s-finalWt.H Ecube=%s-Ecube.H ' % (stem,stem,stem,stem,stem,stem)
     scripts.append(cmd+pbs_util.CheckPrevCmdResultCShellScript(cmd)+'\n')
     scripts.append(pbs_script_creator.CmdFinalCleanUpTempDir())
     pbs_submitter.SubmitJob(pbs_script_creator.AppendScriptsContent(scripts))
     pbs_submitter.WaitOnAllJobsFinish(prefix+'-'+job_identifier)
   # end for while
   print 'ObjFuncValue=%g' % obj_func_value
+  if calc_dimg and not do_3d:  # Convert zxhx to hxyxyz
+    cmd = 'echo n4=1 n5=1 o5=0 o4=0 d4=1 d5=1 >> %s\n' % fnt_dimg_out
+    cmd += '%s/YReorder reshape=1,2,4,5 mapping=4,2,1,3 <%s >%s out=%s@' % (dict_args['YANG_BIN'], fnt_dimg_out, fn_dimg, fn_dimg)
+    sepbase.RunShellCmd(cmd)
   # See if needs to convert dimg-ang back to dimg-off.
   if calc_a2o and calc_dimg:
     assert fnt_dimg_out == fn_dimg_ang
@@ -135,6 +162,6 @@ def Run(argv):
         off2ang3d.Run(sepbase.GenCmdlineArgsFromDict(eq_args_from_cmdline_cp))
   return obj_func_value
 
-
 if __name__ == '__main__':
   Run(sys.argv)
+
