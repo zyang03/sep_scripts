@@ -6,13 +6,14 @@ import os
 ## This program implements the following aliases
 #alias kjoball "qstat | grep zyang03 | gawk '{print $1}' | xargs qdel"
 prefix = None
+user = os.environ['USER']
 if len(sys.argv) >= 2:
   prefix = sys.argv[1]
 if prefix is None:
-  cmd1 = "qstat | grep zyang03 | gawk \'{print $1}\' | xargs qdel"
+  cmd1 = "qstat | grep %s | gawk \'{print $1}\' | xargs qdel" % (user)
   print cmd1
 else:
-  cmd1 = "qstat -a | grep zyang03 | grep %s | gawk \'{print $1}\' " % prefix
+  cmd1 = "qstat -a | grep %s | grep %s | gawk \'{print $1}\' " % (prefix, user)
   stat1,out1=commands.getstatusoutput(cmd1)
   # extract the list of outputs
   jobns = []
