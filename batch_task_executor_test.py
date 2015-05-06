@@ -1,5 +1,4 @@
 #!/usr/bin/python
-
 import copy
 import random
 import sepbase
@@ -10,7 +9,7 @@ from batch_task_executor import *
 import pbs_util
 
 ### An example to define a batch task through inheriting the BatchTaskComposer Task.
-### Read ~zyang03/script/batch_task_executor.py to learn the detailed specifications/explanations of the interfaces defined in BatchTaskComposer.
+### Read /home/zyang03/script/batch_task_executor.py to learn the detailed specifications/explanations of the interfaces defined in BatchTaskComposer.
 class DummyBatchTaskComposer(BatchTaskComposer):
   def __init__(self, param_reader, njobs, avg_nfiles_perjob):
     BatchTaskComposer.__init__(self)

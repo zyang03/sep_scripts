@@ -28,7 +28,7 @@ class BatchTaskExecutor:
     rounds = 0
     while not AllFilesComputed:
       if rounds >= 5:
-        sepbase.err('!The batch_task %s has been iterated over %d rounds, but not fully completed. Check your job description!')
+        sepbase.err('!The batch_task %s has been iterated over %d rounds, but not fully completed. Check your job description!' % (prefix, rounds))
       rounds += 1
       pbs_submitter.WaitOnAllJobsFinish(prefix+'-')
       AllFilesComputed = True
@@ -42,10 +42,11 @@ class BatchTaskExecutor:
           if file_error == 0:
             print "Target file is good, skip: %s" % fn
           else:
-            if file_error == 1:
-              print "! target file is invalid (NaN): %s" % fn
-            else:
-              print "! target file is missing or invalid (check binary part): %s" % fn
+            if rounds > 1:
+              if file_error == 1:
+                print "! target file is invalid (NaN): %s" % fn
+              else:
+                print "! target file is missing or invalid (check binary part): %s" % fn
             need_recompute = True
             break
         if need_recompute:
