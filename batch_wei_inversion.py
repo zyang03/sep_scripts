@@ -208,7 +208,7 @@ if __name__ == '__main__':
         if wib.smooth_rects[i]<1: wib.smooth_rects[i]=1
       wib.Save(WeiInversionBookkeeper.SRCH_CALC,fn_save)
     # Compute step size by trying out two trial model points along the s_k dir,
-    assert False  # BREAK the script, for TEST purpose.
+    # assert False  # BREAK the script, for TEST purpose.
     # stepsizes are alpha1,alpha2
     fn_v1 = "%s-vel1.H" % fn_prefix; fn_v2 = "%s-vel2.H" % fn_prefix
     alpha1 = wib.alpha; alpha2 = 2*alpha1
