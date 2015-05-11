@@ -656,6 +656,7 @@ class WemvaTypeParser:
         "12": (False, True, True),  
         "13": (True, True, True),  # RMO
         "21": (False, True, True),  # RMO, semb0
+        "31": (False, True, True),
         "61": (False, False,False), # DSO
         "62": (False, False,False),
         "63": (False, False,False),
