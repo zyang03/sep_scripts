@@ -132,10 +132,11 @@ def Run(argv):
       cmd += ' ang_img=%s imgh0_zxy=%s rmo.H=%s ' % (fn_img_ang, fn_imgh0_zxy, fn_rmoplot_img)
     if calc_dimg:
       cmd += ' dimg=%s ' % fnt_dimg_out
+      fnb = fn_img_base_wo_ext
+      stem = '%s/%s' % (path_out,fnb)
       if not do_3d:
-        fnb = fn_img_base_wo_ext
-        stem = '%s/%s' % (path_out,fnb)
-        cmd += ' angCube=%s-ang.H angCubeBp=%s-angbp.H semb=%s-semb.H dJdu=%s-dJdu.H finalWt=%s-finalWt.H Ecube=%s-Ecube.H imgh0=%s-imgh0.H imgs_ae=%s-imgs-ae.H masks_ae=%s-masks-ae.H rmo.H=%s-rmo.H ' % (stem,stem,stem,stem,stem,stem,stem,stem,stem,stem)
+        cmd += ' angCube=%s-ang.H angCubeBp=%s-angbp.H dJdu=%s-dJdu.H Ecube=%s-Ecube.H' % (stem,stem,stem,stem)
+      cmd += ' semb=%s-semb.H finalWt=%s-finalWt.H imgh0=%s-imgh0.H imgs_ae=%s-imgs-ae.H masks_ae=%s-masks-ae.H rmo.H=%s-rmo.H rho_cube=%s-rhos.H ' % (stem,stem,stem,stem,stem,stem,stem)
     scripts.append(cmd+pbs_util.CheckPrevCmdResultCShellScript(cmd)+'\n')
     scripts.append(pbs_script_creator.CmdFinalCleanUpTempDir())
     pbs_submitter.SubmitJob(pbs_script_creator.AppendScriptsContent(scripts))
