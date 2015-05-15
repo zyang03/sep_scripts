@@ -545,6 +545,7 @@ class PbsSubmitter:
     Args:
       grep_pattern: An optional pattern string that will be used to find all jobs under the given user and matches the grep_pattern.'''
     icnt = 0
+    nsecs_backoff = 120
     while True:
       # Exclude the error jobs (' C ') coz these jobs can remain in qstat info for quite some time.
       if not grep_pattern:
@@ -554,12 +555,16 @@ class PbsSubmitter:
         # Due to the column width constrain from qstat display, only maximum of 15 chars in grep_pattern(job name basically) will be shown.
         cmd = "qstat -a | grep -v \' C \' | grep %s | grep %s | wc -l " % (self._user_name, grep_pattern[0:15])
       stat1,out1=commands.getstatusoutput(cmd)
-      if int(out1) > 0:
-        icnt += 1
-        if icnt == 1: print "Wait On All Jobs to Finish (%s)..." % grep_pattern[0:15]
-        time.sleep(2)
-      else:
-        break
+      if stat1 != 0:  # abnormal case, qstat query is not successful
+        print 'qstat query error, will back off a while; return msg = %s' % out1
+        time.sleep(nsecs_backoff)
+      else:  # Normal case, query is successful
+        if int(out1) > 0:
+          icnt += 1
+          if icnt == 1: print "Wait On All Jobs to Finish (%s)..." % grep_pattern[0:15]
+          time.sleep(2)
+        else:
+          break
     return
 
   def SubmitJob(self, fn_script):
