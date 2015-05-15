@@ -34,7 +34,8 @@ def Run(argv):
   # Initialize script_creators and PbsSubmitter.
   pbs_script_creator = pbs_util.PbsScriptCreator(param_reader)
   wei_scriptor = pbs_util.WeiScriptor(param_reader)
-  assert param_reader.queues[0] != 'default'  # Put sep queue ahead of the default queue.
+  if param_reader.queues[0] == 'default':
+    print 'WARN: Consider putting sep queue ahead of the default queue.'
   pbs_submitter = pbs_util.PbsSubmitter(zip(param_reader.queues, param_reader.queues_cap), param_reader.total_jobs_cap, dict_args['user'])
   # See if specify image/Hessian dimensions in cmdline
   [xmin_cmdl,xmax_cmdl, ymin_cmdl,ymax_cmdl, zmin_cmdl,zmax_cmdl] = param_reader.g_output_image_domain

@@ -346,6 +346,15 @@ class WeiScriptor(JobScriptor):
     if 'WET_PAR' not in self.dict_args:
       self.dict_args['WET_PAR'] = ''
     self.sz_shotrange = None
+    src_type = self.param_reader.source_type
+    self.add_pars = ''
+    if src_type == 'plane':
+      self.add_pars = ' offset=n comsou=y '
+    elif src_type == 'pt':
+      self.add_pars = ' comsou=n '
+    else:
+      assert False
+    return
 
   def NewJob(self, sz_shotrange):
     """Call this func first everytime you start a new job."""
@@ -363,8 +372,8 @@ class WeiScriptor(JobScriptor):
     prefix = self.param_reader.prefix
     self.fnt_output = '%s/dvel-%s-%04d.H' % (path_tmp,prefix,ish)
     self.fnt_output_list.append(self.fnt_output)
-    cmd1 = "time %s/bwi-wet3d-Zh.x %s %s mode=tomadj crec=%s csou=%s dimg=%s bvel=%s dvel=%s datapath=%s/" % (
-        self.dict_args['TANG_BIN'], self.dict_args['MIG_PAR_WAZ3D'], self.dict_args['WET_PAR'], self.fnt_crec, self.fnt_csou, self.fnt_dimg,self.fnt_bvel,self.fnt_output, path_tmp)
+    cmd1 = "time %s/bwi-wet3d-Zh.x %s %s mode=tomadj crec=%s csou=%s dimg=%s bvel=%s dvel=%s datapath=%s/ %s" % (
+        self.dict_args['TANG_BIN'], self.dict_args['MIG_PAR_WAZ3D'], self.dict_args['WET_PAR'], self.fnt_crec, self.fnt_csou, self.fnt_dimg,self.fnt_bvel,self.fnt_output, path_tmp, self.add_pars)
     # The output dimension will always be the same as the input vel model.
     return cmd + cmd1+CheckPrevCmdResultCShellScript(cmd1)
 
@@ -379,17 +388,17 @@ class WeiScriptor(JobScriptor):
     wem_bin_path = self.dict_args['TANG_BIN']
     final_cmd = cmd
     if True:  # Do the cost-saving way
-      cmd1 = "time %s/bwi-wet3d-Zh.x %s %s mode=tomimit csou=%s dimg=%s bimgh0=%s bvel=%s dvel=%s datapath=%s/" % (
-          wem_bin_path,self.dict_args['MIG_PAR_WAZ3D'],self.dict_args['WET_PAR'], self.fnt_csou,self.fnt_dimg,self.fnt_bimgh0,self.fnt_bvel,self.fnt_output, path_tmp)
+      cmd1 = "time %s/bwi-wet3d-Zh.x %s %s mode=tomimit csou=%s dimg=%s bimgh0=%s bvel=%s dvel=%s datapath=%s/ %s" % (
+          wem_bin_path,self.dict_args['MIG_PAR_WAZ3D'],self.dict_args['WET_PAR'], self.fnt_csou,self.fnt_dimg,self.fnt_bimgh0,self.fnt_bvel,self.fnt_output, path_tmp, self.add_pars)
     # The output dimension will always be the same as the input vel model.
       final_cmd += cmd1+CheckPrevCmdResultCShellScript(cmd1)
     else :  # Do the more expensive way
       self.fnt_h0_crec = '%s/crec-h0-%04d.H' % (path_tmp,ish)
-      cmd1 = "time %s/bwi-wem3d-Zh.x %s %s mode=imgfwd crec=%s csou=%s bimg=%s bvel=%s datapath=%s/" % (
-          wem_bin_path, self.dict_args['MIG_PAR_WAZ3D'], self.dict_args['GEOM_GXY'], self.fnt_h0_crec, self.fnt_csou, self.fnt_bimgh0,self.fnt_bvel, path_tmp)
+      cmd1 = "time %s/bwi-wem3d-Zh.x %s %s mode=imgfwd crec=%s csou=%s bimg=%s bvel=%s datapath=%s/ %s" % (
+          wem_bin_path, self.dict_args['MIG_PAR_WAZ3D'], self.dict_args['GEOM_GXY'], self.fnt_h0_crec, self.fnt_csou, self.fnt_bimgh0,self.fnt_bvel, path_tmp, self.add_pars)
       final_cmd += cmd1+CheckPrevCmdResultCShellScript(cmd1)
-      cmd2 = "time %s/bwi-wet3d-Zh.x %s %s mode=tomadj csou=%s dimg=%s crec=%s bvel=%s dvel=%s datapath=%s/" % (
-          wem_bin_path,self.dict_args['MIG_PAR_WAZ3D'],self.dict_args['WET_PAR'], self.fnt_csou,self.fnt_dimg,self.fnt_h0_crec,self.fnt_bvel,self.fnt_output, path_tmp)
+      cmd2 = "time %s/bwi-wet3d-Zh.x %s %s mode=tomadj csou=%s dimg=%s crec=%s bvel=%s dvel=%s datapath=%s/ %s" % (
+          wem_bin_path,self.dict_args['MIG_PAR_WAZ3D'],self.dict_args['WET_PAR'], self.fnt_csou,self.fnt_dimg,self.fnt_h0_crec,self.fnt_bvel,self.fnt_output, path_tmp,self.add_pars)
       final_cmd += cmd2+CheckPrevCmdResultCShellScript(cmd2)
     return final_cmd
 
@@ -401,8 +410,9 @@ class WeiScriptor(JobScriptor):
     prefix = self.param_reader.prefix
     self.fnt_imgh = '%s/imgh-%s-%04d.H' % (path_tmp,prefix,ish)
     self.fnt_output_list.append(self.fnt_imgh)
-    cmd1 = "time %s/bwi-wem3d-Zh.x %s %s %s mode=imgadj crec=%s csou=%s bimg=%s bvel=%s datapath=%s/ " % (
-        self.dict_args['TANG_BIN'], self.dict_args['MIG_PAR_WAZ3D'], self.dict_args.get('IMG_PAR',""),self.dict_args['SS_OFFSET_PAR'], self.fnt_crec, self.fnt_csou, self.fnt_imgh,self.fnt_bvel, path_tmp)
+    cmd1 = "time %s/bwi-wem3d-Zh.x %s %s %s mode=imgadj crec=%s csou=%s bimg=%s bvel=%s datapath=%s/ %s" % (
+        self.dict_args['TANG_BIN'], self.dict_args['MIG_PAR_WAZ3D'], self.dict_args.get('IMG_PAR',""),self.dict_args['SS_OFFSET_PAR'],
+        self.fnt_crec, self.fnt_csou, self.fnt_imgh,self.fnt_bvel, path_tmp, self.add_pars)
     xmin, xmax = image_domains[0:2]
     ymin, ymax = image_domains[2:4]
     zmin, zmax = image_domains[4:6]
@@ -417,15 +427,11 @@ class WeiScriptor(JobScriptor):
   def CmdBornModelingPerShot(self, ish):
     cmd = '# Do born modeling for the current shot.\n' 
     path_tmp = self.param_reader.path_tmp
-    src_type = self.param_reader.source_type
     self.fnt_crec = '%s/crec-model-%04d.H' % (path_tmp,ish)
     wem_bin_path = self.dict_args['TANG_BIN']
-    if src_type == 'plane':
-      cmd1 = "time %s/bwi-wem3d-Zh.x %s %s mode=imgfwd crec=%s csou=%s bimg=%s bvel=%s datapath=%s/" % (
-          wem_bin_path, self.dict_args['MIG_PAR_WAZ3D'], self.dict_args['GEOM_GXY'], self.fnt_crec, self.fnt_csou, self.fnt_bimg,self.fnt_bvel, path_tmp)
-    else:
-      cmd1 = "time %s/bwi-wem3d-Zh.x %s %s mode=imgfwd crec=%s csou=%s bimg=%s bvel=%s datapath=%s/" % (
-          wem_bin_path, self.dict_args['MIG_PAR_WAZ3D'], self.dict_args['GEOM_GXY'], self.fnt_crec, self.fnt_csou, self.fnt_bimg,self.fnt_bvel, path_tmp)
+    cmd1 = "time %s/bwi-wem3d-Zh.x %s %s mode=imgfwd crec=%s csou=%s bimg=%s bvel=%s datapath=%s/ %s" % (
+        wem_bin_path, self.dict_args['MIG_PAR_WAZ3D'], self.dict_args['GEOM_GXY'], self.fnt_crec,
+        self.fnt_csou, self.fnt_bimg,self.fnt_bvel, path_tmp, self.add_pars)
     return cmd + cmd1+CheckPrevCmdResultCShellScript(cmd1)
 
   def CmdCpbvelForEachJob(self, zmax=None):  # Notice we can not change zmin, because the wfld has to propagate from the very top of model.
@@ -487,7 +493,8 @@ class WeiScriptor(JobScriptor):
     # If user only select a portion of frequencies to migrate/compute/model, w_f,w_n
     ws_wnd_f, ws_wnd_n, ws_wnd_d = self.param_reader.ws_wnd_f, self.param_reader.ws_wnd_n, self.param_reader.ws_wnd_d
     fn_csou = self.param_reader.fn_csou
-    if self.param_reader.source_type == 'plane':
+    src_type = self.param_reader.source_type
+    if src_type == 'plane':
       fnt_csou = "%s/csou-plane-%04d.H" % (path_tmp, ish)  # Append the filename fn_csou with shotIndex as the new filename.
       # The source func for each shot is different. Needs to do Window based on it.
       n4 = int(sepbase.get_sep_axis_params(fn_csou,4)[0])
@@ -498,13 +505,15 @@ class WeiScriptor(JobScriptor):
             fn_csou,ws_wnd_f,ws_wnd_n,ws_wnd_d, f4,f5,fnt_csou,path_tmp)
       else:
         cmd2 = "Window3d <%s n4=1 n5=1 f4=%d f5=%d >%s squeeze=n datapath=%s/ "%(fn_csou,f4,f5,fnt_csou,path_tmp)
-    else:  # Point Source
+    elif src_type == 'pt':  # Point Source
       fnt_csou = "%s/csou-pt-%04d.H" % (path_tmp, ish)  # Append the filename fn_csou with shotIndex as the new filename.
       if ws_wnd_n is not None:
         cmd2 = "Window3d <%s f3=%d n3=%d j3=%d >%s squeeze=n datapath=%s/ " % (
             fn_csou,ws_wnd_f,ws_wnd_n,ws_wnd_d, fnt_csou,path_tmp)
       else:
         cmd2 = "Cp %s %s datapath=%s/ "%(fn_csou, fnt_csou, path_tmp)
+    else:
+      assert False
     self.fnt_csou = fnt_csou
     return cmd+cmd2+CheckPrevCmdResultCShellScript(cmd2)
 
