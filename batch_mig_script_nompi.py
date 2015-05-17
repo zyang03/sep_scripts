@@ -96,15 +96,16 @@ def Run(argv):
   # end for while
   # Now combine all imgh files together, use a new pbs_submitter, need to use the non-default queue.
   if len(fn_imgh_list_all) >= 50:
+    assert param_reader.queues[0] != 'default'
     pbs_submitter = pbs_util.PbsSubmitter([(param_reader.queues[0], param_reader.queues_cap[0])], None, dict_args['user'])
   else:
     pbs_submitter = pbs_util.PbsSubmitter(zip(param_reader.queues, param_reader.queues_cap), None, dict_args['user'])
   scripts = []
   combine_pars = ""
   if xmin_cmdl is not None:
-    combine_pars += "oe3=%g,%g ndim=5" % (xmin_cmdl,xmax_cmdl)
+    combine_pars += " oe3=%g,%g ndim=5 " % (xmin_cmdl,xmax_cmdl)
   if ymin_cmdl is not None:
-    combine_pars += "oe4=%g,%g " % (ymin_cmdl,ymax_cmdl)
+    combine_pars += " oe4=%g,%g " % (ymin_cmdl,ymax_cmdl)
   scripts.append(pbs_script_creator.CmdCombineMultipleOutputSephFiles(
       fn_imgh_list_all, fn_imgh_final, combine_pars, datapath_final))
   pbs_script_creator.CreateScriptForNewJob(fn_base_wo_ext)
