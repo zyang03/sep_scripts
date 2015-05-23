@@ -7,7 +7,7 @@ YANG_BIN=  /data/sep/zyang03/bin
 # Plane-wave, target region only.
 source_type= plane
 
-MIG_PAR_WAZ3D=  pdip=65 oper=ssfpi nvrf=4 nws=144 nxpad_beg=30 nxpad_end=30 nypad_beg=30 nypad_end=30 ntpx=25 ntpy=25 memchk=n report=y offset=n
+MIG_PAR_WAZ3D=  pdip=65 oper=ssfpi nvrf=5 nws=144 nxpad_beg=30 nxpad_end=30 nypad_beg=30 nypad_end=30 ntpx=25 ntpy=25 memchk=n report=y offset=n
 #IMG_PAR= image_dx=50 image_dy=60
 
 #SS_OFFSET_PAR=  nhx=21 dhx=50 ohx=-500 nhy=19 dhy=60 ohy=-540
