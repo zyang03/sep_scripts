@@ -149,6 +149,9 @@ class JobParamReader:
     if self.total_jobs_cap is not None:
       self.total_jobs_cap = map(int, self.total_jobs_cap.split(','))
       assert nqueue == len(self.total_jobs_cap)
+    self.priority_num_Q_jobs = None
+    if 'priority_num_Q_jobs' in dict_args:
+      self.priority_num_Q_jobs = map(int, self.priority_num_Q_jobs.split(','))
     self.njobs_max = 1  # For now set it to 1.
     self.path_out = abspath(dict_args.get("path_out", os.getcwd()))
     assert os.path.exists(self.path_out)
@@ -628,6 +631,12 @@ class PbsSubmitter:
           # Then start polling the first queue again.
           i_queue = 0
     return
+
+# Second constructor for PbsSubmitter
+def SubmitterFromParamReader(job_param_reader):
+  param_reader = job_param_reader
+  return PbsSubmitter(zip(param_reader.queues, param_reader.queues_cap), param_reader.total_jobs_cap, None, param_reader.priority_num_Q_jobs)
+
 
 def OverlapRectangle(rect1,rect2):
   '''Compute the overlap between two rectangles, the elements in rect2 can be empty.

@@ -15,7 +15,8 @@ class BatchTaskExecutor:
     self.job_param_reader = job_param_reader
     self.pbs_submitter = pbs_submitter
     if self.pbs_submitter is None:  # Provide a default job submitter
-      self.pbs_submitter = pbs_util.PbsSubmitter(zip(job_param_reader.queues, job_param_reader.queues_cap), job_param_reader.total_jobs_cap)
+      #self.pbs_submitter = pbs_util.PbsSubmitter(zip(job_param_reader.queues, job_param_reader.queues_cap), job_param_reader.total_jobs_cap)
+      self.pbs_submitter = pbs_util.SubmitterFromParamReader(self.job_param_reader)
     return
 
   def LaunchBatchTask(self, prefix, batch_task_composer):
