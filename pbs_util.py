@@ -175,6 +175,7 @@ class WeiParamReader(ParallelParamReader):
   def __init__(self, dict_args):
     ParallelParamReader.__init__(self, dict_args)  # Call base class constructor.
     # Get the velocity file, csou file and filename prefix for intermediate files.
+    self.b3D = sepbase.ParseBooleanString(dict_args['b3D'])
     self.source_type = dict_args.get("source_type", "plane")
     self.fn_csou = abspath(dict_args["csou"])
     self.fn_v3d = abspath(dict_args["vel"])
@@ -420,11 +421,11 @@ class WeiScriptor(JobScriptor):
     ymin, ymax = image_domains[2:4]
     zmin, zmax = image_domains[4:6]
     if xmin is not None:
-      cmd1 += " image_xmin=%.1f image_xmax=%.1f " % (xmin,xmax)
-    if ymin is not None:
-      cmd1 += " image_ymin=%.1f image_ymax=%.1f " % (ymin,ymax)
+      cmd1 += " image_xmin=%.4f image_xmax=%.4f " % (xmin,xmax)
+    if ymin is not None and self.param_reader.b3D:
+      cmd1 += " image_ymin=%.4f image_ymax=%.4f " % (ymin,ymax)
     if zmin is not None:
-      cmd1 += " image_zmin=%.1f image_zmax=%.1f " % (zmin,zmax)
+      cmd1 += " image_zmin=%.4f image_zmax=%.4f " % (zmin,zmax)
     return cmd + cmd1+CheckPrevCmdResultCShellScript(cmd1)
 
   def CmdBornModelingPerShot(self, ish):
@@ -445,7 +446,7 @@ class WeiScriptor(JobScriptor):
     if zmax is None:
       cmd1 = "time Cp %s %s out=%s@ " % (fn_v3d, self.fnt_bvel, self.fnt_bvel)
     else:
-      cmd1 = "time %s/YWindow3d max3=%g <%s >%s out=%s@ " % (self.dict_args['YANG_BIN'], zmax, fn_v3d, self.fnt_bvel,self.fnt_bvel)
+      cmd1 = "time %s/YWindow3d max3=%g squeeze=n <%s >%s out=%s@ " % (self.dict_args['YANG_BIN'], zmax, fn_v3d, self.fnt_bvel,self.fnt_bvel)
     return cmd + cmd1+CheckPrevCmdResultCShellScript(cmd1)
 
   def CmdCpbimgForEachJob(self):

@@ -1,0 +1,34 @@
+[OnewayWet]
+# Params for oneway Wave-equation tomography code by Tang.
+TANG_BIN=  /data/sep/zyang03/other/yaxun_weo/bin
+YANG_BIN=  /data/sep/zyang03/bin
+
+# Plane-wave
+source_type= plane
+MIG_PAR_WAZ3D=  pdip=45 oper=foufd nvrf=4 nws=201 nxpad_beg=40 nxpad_end=40 ntpx=20 memchk=n report=y comsou=y offset=n
+SS_OFFSET_PAR=  nhx=31 dhx=0.025 ohx=-0.375
+
+# For test
+# SS_OFFSET_PAR=  nhx=1 dhx=50 ohx=0 nhy=1 dhy=60 ohy=0
+HESS_PAR=  comsou=n grecin=y hestyp=2 rdmtype=2 offset=y
+#GEOM_GXY= ngx=273 dgx=25 ogx=17500  ngy=175 dgy=30 ogy=-6210
+GEOM_GXY= ngx=1400 dgx=0.025 ogx=-5 
+
+[Angle gathers]
+# fn_off2ang_par= 
+
+[Solver Vel Inversion]
+minval= 2700
+maxval= 3850
+#smooth_rect_sizes=10,8,4
+#smooth_rect_reductions=2,2,1
+smooth_rect_sizes=54,45,9
+smooth_rect_reductions=2,2,1
+nrepeat=2
+# The first iter should not change more than +/- 100m/s (in a rms sense) on average.
+initial_perturb_scale=15
+max_perturb_scale=40
+
+[Examples]
+FamilyName: Johnson
+
