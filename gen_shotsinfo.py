@@ -105,6 +105,7 @@ if __name__ == '__main__':
     ymin -= aper_y_extra; ymax += aper_y_extra
     lines_output.append("%s %5.3f %5.3f %5.3f %5.3f" % (file_name_full,xmin,xmax,ymin,ymax))
     file_cnt += 1
+    print "file_cnt=%d" % file_cnt
   # End for file in shot_files
   # Now write out the first two lines of file.
   offset = "y"

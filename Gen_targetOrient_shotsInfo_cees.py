@@ -121,7 +121,7 @@ while 1:
         if (sy_max < osy): err("F2")
         if (gx_max < ogx): err("F3") 
         if (gy_max < ogy): err("F4")
-        print "icnt=%d, %f %f %f %f"%(ifcnt,ogx,ogy,osx,osy)
+        #print "icnt=%d, %f %f %f %f"%(ifcnt,ogx,ogy,osx,osy)
         #Calculate the midpoint aperture based on the src/recv locations
         if (bMarine):
           xmmin = ((osx+ogx)+osx)*0.5;  xmmax = (sx_max+(sx_max+gx_max))*0.5
@@ -130,6 +130,7 @@ while 1:
           xmmin = (osx+ogx)*0.5;  xmmax = (sx_max+gx_max)*0.5
           ymmin = (osy+ogy)*0.5;  ymmax = (sy_max+gy_max)*0.5
         wid_x = xmmax-xmmin; wid_y = ymmax-ymmin
+        print "icnt=%d, xmin/xmax/ymin/ymax = %f %f %f %f"%(ifcnt,xmmin,xmmax,ymmin,ymmax)
         #if this shot is relavant
         x_overlap,y_overlap = is_rect_overlap(xmmin,xmmax,ymmin,ymmax,roi_xmin,roi_xmax,roi_ymin,roi_ymax)
         if (x_overlap and y_overlap):

@@ -71,6 +71,8 @@ def get_sep_his_par_sf(file, par):
   """Deal with seplib Get bug."""
   stat1,out1=commands.getstatusoutput("%s/sfget parform=no <%s %s"%(sfbin,file,par))
   assert stat1==0, err("!Trouble reading param %s from file %s using sfget" % (par, file))
+  if out1[0:9] == 'sfget: No':  # No par found
+    out1 = ''
   return out1
 
 def get_sep_axis_params(file, iaxis):

@@ -77,8 +77,13 @@ if __name__ == '__main__':
   str_ws_wnd = dict_args.get('ws_wnd')
   fn_gradmask = dict_args.get('gradmask',None)
   if fn_gradmask: print "Using gradmask: %s" % (fn_gradmask)
+  fn_clipmask = dict_args.get('clipmask',None)
+  if fn_clipmask: print "Using clipmask: %s" % (fn_clipmask)
+  else: fn_clipmask = fn_gradmask
   wemva_type_parser = pbs_util.WemvaTypeParser(dict_args['wemva_type'],True)
   reuse_stepsize = sepbase.ParseBooleanString(dict_args['reuse_stepsize'])
+  reuse_smooth_rects = sepbase.ParseBooleanString(dict_args.get('reuse_smooth_rects', 'n'))
+  print "reuse_smooth_rects=%s" % reuse_smooth_rects
   assert 'mode' not in dict_args
   eq_args_cmdline['mode'] = wemva_type_parser.tomo_mode
   # The inversion code, v is vel model, s is search direction.
@@ -122,6 +127,10 @@ if __name__ == '__main__':
         str_objfuncs = sepbase.get_sep_his_par_sf(fn_vn,"objfuncs")
         if str_objfuncs:
           wei_inv_bookkeeper.objfuncs = map(float,str_objfuncs.split(','))
+        str_smooth_rects = sepbase.get_sep_his_par_sf(fn_vn,"smooth_rects")
+        print str_smooth_rects
+        if str_smooth_rects and reuse_smooth_rects:
+          wei_inv_bookkeeper.smooth_rects = map(int,str_smooth_rects.split(','))
         break
   wib = wei_inv_bookkeeper  # An acronym, less typing.
   if wib.fn_v is None: wib.fn_v = fn_v0
@@ -220,7 +229,7 @@ if __name__ == '__main__':
       if not fn_vels_exist:
         cmd = ('%s/GenTrialModelFromSrchDir.x <%s srch=%s stepsize=%f,%f vmax=%g vmin=%g output=%s,%s datapath=%s/ ' % 
              (dict_args['YANG_BIN'], wib.fn_v,fn_srch,alpha1,alpha2,solver_par.maxval,solver_par.minval, fn_v1,fn_v2, path_iter))
-        if fn_gradmask: cmd += ' gradmask=%s ' % fn_gradmask
+        if fn_clipmask: cmd += ' gradmask=%s ' % fn_clipmask
         sepbase.RunShellCmd(cmd,True,True)
         assert pbs_util.CheckSephFileError(fn_v1,False)==0
         assert pbs_util.CheckSephFileError(fn_v2,False)==0
@@ -273,8 +282,9 @@ if __name__ == '__main__':
       assert pbs_util.CheckSephFileError(fn_vn,True)==0
       # Write the alpha and objfuncs history to fn_vn
       fp = open(fn_vn,'a');
-      fp.write("\nstepsizes=%s\n" % ','.join(["%g"%x for x in wib.stepsizes]))
-      fp.write("objfuncs=%s\n" % ','.join(["%g"%x for x in wib.objfuncs]))
+      fp.write('\nstepsizes=%s\n' % ','.join(["%g"%x for x in wib.stepsizes]))
+      fp.write('objfuncs=%s\n' % ','.join(["%g"%x for x in wib.objfuncs]))
+      fp.write('smooth_rects=%s\n' % ','.join(["%g" % val for val in wib.smooth_rects])
       fp.close()
       wib.Save(WeiInversionBookkeeper.VELNEW_CALC,fn_save)
     # Update v_{k+1} := v_k.
@@ -284,5 +294,5 @@ if __name__ == '__main__':
   print "!Finished. The final inverted model is saved at: %s" % os.path.abspath(wib.fn_v)
   print 'objfuncs=','\t'.join(["%g" % val for val in wib.objfuncs])
   print 'stepsizes=','\t'.join(["%g" % val for val in wib.stepsizes])
-
+  print 'smooth_rects=','\t'.join(["%g" % val for val in wib.smooth_rects])
 

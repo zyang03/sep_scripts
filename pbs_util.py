@@ -568,7 +568,7 @@ class PbsSubmitter:
         # Due to the column width constrain from qstat display, only maximum of 15 chars in grep_pattern(job name basically) will be shown.
         cmd = "qstat -a | grep -v \' C \' | grep %s | grep %s | wc -l " % (self._user_name, grep_pattern[0:15])
       stat1,out1=commands.getstatusoutput(cmd)
-      if stat1 != 0:  # abnormal case, qstat query is not successful
+      if stat1 != 0 or not out1.isdigit():  # abnormal case, qstat query is not successful
         print 'qstat query error, will back off a while; return msg = %s' % out1
         time.sleep(nsecs_backoff)
       else:  # Normal case, query is successful
